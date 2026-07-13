@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from models import GraphMetadata, MathRequest, MathResponse
 from parsers import parse_edge_list, parse_formula, parse_json
+from topology import compute_spectral_topology
 
 # --- Logging ------------------------------------------------------------------
 
@@ -239,11 +240,12 @@ async def process_object(payload: MathRequest) -> MathResponse:
     # --- Compute invariants ---
     try:
         metadata = _compute_metadata(graph)
+        topology = compute_spectral_topology(graph)
     except Exception as exc:
-        log.exception("Invariant computation failed: %s", exc)
+        log.exception("Invariant/topology computation failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Invariant computation error: {exc}",
+            detail=f"Invariant/topology computation error: {exc}",
         ) from exc
 
     # --- Build response ---
@@ -267,4 +269,5 @@ async def process_object(payload: MathRequest) -> MathResponse:
         nodes=sorted_nodes,
         edges=edges_list,
         metadata=metadata,
+        topology=topology,
     )

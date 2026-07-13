@@ -1,4 +1,4 @@
-﻿"""
+"""
 Visual Mathematical Discovery Engine - Pydantic Schemas (Step 2)
 ================================================================
 Defines the strict API contract between the FastAPI backend and the
@@ -145,6 +145,24 @@ class GraphMetadata(BaseModel):
 # --- Response -----------------------------------------------------------------
 
 
+class TopologyMetadata(BaseModel):
+    """
+    Spectral and topological features computed from the graph's Laplacian.
+    """
+    laplacian_eigenvalues: list[float] = Field(
+        ...,
+        description="Sorted eigenvalues of the Laplacian matrix.",
+    )
+    fiedler_vector: dict[Union[int, str], float] = Field(
+        ...,
+        description="Fiedler vector mapping node ID to its float value.",
+    )
+    algebraic_connectivity: float = Field(
+        ...,
+        description="Second smallest eigenvalue of the Laplacian (algebraic connectivity).",
+    )
+
+
 class MathResponse(BaseModel):
     """
     Standardised response returned to the frontend after parsing and
@@ -164,6 +182,9 @@ class MathResponse(BaseModel):
 
     metadata : GraphMetadata
         The computed topological invariants of the 1-skeleton.
+        
+    topology : TopologyMetadata
+        Spectral graph theory metrics (Laplacian eigenvalues, Fiedler vector).
     """
 
     nodes: list[Union[int, str]] = Field(
@@ -178,3 +199,8 @@ class MathResponse(BaseModel):
         ...,
         description="Computed topological invariants of the graph.",
     )
+    topology: TopologyMetadata = Field(
+        ...,
+        description="Spectral topological features (Laplacian).",
+    )
+
