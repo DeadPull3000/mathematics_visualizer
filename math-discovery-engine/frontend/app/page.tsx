@@ -216,7 +216,7 @@ function Dropzone({
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1, paddingBottom: 16 }}>
       {/* Mode tabs */}
       <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #2C3133" }}>
         {modes.map((m) => (

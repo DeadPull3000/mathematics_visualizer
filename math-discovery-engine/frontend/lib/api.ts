@@ -1,4 +1,4 @@
-﻿/**
+/**
  * frontend/lib/api.ts
  * -------------------------------------------------------------------------
  * Typed API client for the Visual Mathematical Discovery Engine.
@@ -10,7 +10,7 @@
 
 // --- Configuration -----------------------------------------------------------
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 // --- Shared types (mirrors backend models.py) --------------------------------
 
