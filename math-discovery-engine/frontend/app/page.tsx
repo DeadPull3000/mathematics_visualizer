@@ -236,8 +236,6 @@ function Dropzone({
   onFileLoad,
   isDragging,
   setIsDragging,
-  onDiscover,
-  isLoading,
 }: {
   domain: Domain;
   inputMode: InputMode;
@@ -247,8 +245,6 @@ function Dropzone({
   onFileLoad: (content: string) => void;
   isDragging: boolean;
   setIsDragging: (v: boolean) => void;
-  onDiscover: () => void;
-  isLoading: boolean;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -277,10 +273,8 @@ function Dropzone({
   return (
     <div
       style={{
-        flex: 1,
         display: "flex",
         flexDirection: "column",
-        padding: "0 0 16px 0",
         gap: 16,
       }}
     >
@@ -319,7 +313,7 @@ function Dropzone({
           onDrop={handleDrop}
           onClick={() => fileRef.current?.click()}
           style={{
-            flex: 1,
+            minHeight: 220,
             border: `1.5px dashed ${isDragging ? domain.color : "#2C3133"}`,
             borderRadius: 12,
             display: "flex",
@@ -380,7 +374,7 @@ function Dropzone({
 
       {/* Paste edge list */}
       {inputMode === "paste" && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
             Paste an edge list — one edge per line, space-separated. e.g.{" "}
             <code style={{ color: domain.color, fontSize: 11 }}>0 1</code>
@@ -391,7 +385,7 @@ function Dropzone({
             onChange={(e) => setPastedText(e.target.value)}
             placeholder={"0 1\n1 2\n2 3\n3 0\n0 2\n1 3"}
             style={{
-              flex: 1,
+              minHeight: 200,
               background: "#111315",
               border: "1px solid #2C3133",
               borderRadius: 10,
@@ -400,7 +394,7 @@ function Dropzone({
               fontSize: 13,
               lineHeight: 1.7,
               padding: "14px 16px",
-              resize: "none",
+              resize: "vertical",
               outline: "none",
               transition: "border-color 0.15s",
             }}
@@ -412,7 +406,7 @@ function Dropzone({
 
       {/* Formula input */}
       {inputMode === "formula" && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
             Enter a mathematical expression or knot notation
           </div>
@@ -437,7 +431,6 @@ function Dropzone({
           />
           <div
             style={{
-              flex: 1,
               background: "#111315",
               border: "1px solid #2C3133",
               borderRadius: 10,
@@ -464,49 +457,6 @@ function Dropzone({
         </div>
       )}
 
-      {/* Discover button */}
-      <button
-        id="discover-btn"
-        onClick={onDiscover}
-        disabled={isLoading}
-        style={{
-          background: isLoading
-            ? "#2C3133"
-            : `linear-gradient(135deg, ${domain.color}, ${domain.color}cc)`,
-          border: "none",
-          borderRadius: 10,
-          color: isLoading ? "#888C8E" : "#E6E4DF",
-          cursor: isLoading ? "not-allowed" : "pointer",
-          fontSize: 14,
-          fontWeight: 600,
-          letterSpacing: "0.06em",
-          padding: "14px 24px",
-          transition: "all 0.2s ease",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 10,
-          textTransform: "uppercase",
-        }}
-        onMouseEnter={(e) => {
-          if (!isLoading)
-            (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
-        }}
-      >
-        {isLoading ? (
-          <>
-            <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span>
-            Computing Invariants…
-          </>
-        ) : (
-          <>
-            <span>⚗</span> Discover Structure
-          </>
-        )}
-      </button>
     </div>
   );
 }
@@ -849,8 +799,9 @@ function RightPanel({
   return (
     <div
       style={{
-        width: isOpen ? 240 : 44,
-        minWidth: isOpen ? 240 : 44,
+        width: isOpen ? 280 : 44,
+        minWidth: isOpen ? 280 : 44,
+        flexShrink: 0,
         background: "#1C1F21",
         borderLeft: "1px solid #2C3133",
         transition: "width 0.25s ease, min-width 0.25s ease",
@@ -1071,22 +1022,24 @@ export default function HomePage() {
           </div>
         </header>
 
-        {/* Body */}
+        {/* Body — fills remaining viewport height, never overflows */}
         <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
           <Sidebar selected={selectedDomain} onSelect={setSelectedDomain} />
 
+          {/* ── Central scrollable column ─────────────────────────────── */}
           <main
             style={{
               flex: 1,
+              minWidth: 0,
+              overflowY: "auto",
+              padding: 32,
               display: "flex",
               flexDirection: "column",
-              overflow: "hidden",
-              padding: 20,
-              gap: 16,
-              minWidth: 0,
+              gap: 32,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            {/* Breadcrumb */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ color: selectedDomain.color, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>
                 {selectedDomain.icon} {selectedDomain.label}
               </span>
@@ -1094,22 +1047,20 @@ export default function HomePage() {
               <span style={{ color: "#888C8E", fontSize: 11 }}>{selectedDomain.subtitle}</span>
             </div>
 
-            {/* Dropzone section */}
+            {/* ── Dropzone card ──────────────────────────────────────── */}
             <section
               style={{
-                flex: "0 0 auto",
-                height: "42%",
                 background: "#1C1F21",
                 border: "1px solid #2C3133",
                 borderRadius: 12,
-                padding: 18,
+                padding: 24,
                 display: "flex",
                 flexDirection: "column",
-                gap: 0,
-                minHeight: 0,
+                gap: 16,
+                minHeight: 280,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>
                   ⬆ Input / Dropzone
                 </span>
@@ -1126,17 +1077,61 @@ export default function HomePage() {
                 onFileLoad={handleFileLoad}
                 isDragging={isDragging}
                 setIsDragging={setIsDragging}
-                onDiscover={handleDiscover}
-                isLoading={isLoading}
               />
             </section>
 
-            {/* Microscope section */}
-            <section style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+            {/* ── Discover Structure button — standalone, between sections */}
+            <button
+              id="discover-btn"
+              onClick={handleDiscover}
+              disabled={isLoading}
+              style={{
+                background: isLoading
+                  ? "#2C3133"
+                  : `linear-gradient(135deg, ${selectedDomain.color}, ${selectedDomain.color}cc)`,
+                border: "none",
+                borderRadius: 10,
+                color: isLoading ? "#888C8E" : "#E6E4DF",
+                cursor: isLoading ? "not-allowed" : "pointer",
+                fontSize: 14,
+                fontWeight: 600,
+                letterSpacing: "0.06em",
+                padding: "16px 24px",
+                transition: "all 0.2s ease",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                textTransform: "uppercase",
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => {
+                if (!isLoading)
+                  (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+              }}
+            >
+              {isLoading ? (
+                <>
+                  <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span>
+                  Computing Invariants…
+                </>
+              ) : (
+                <>
+                  <span>⚗</span> Discover Structure
+                </>
+              )}
+            </button>
+
+            {/* ── Microscope output ──────────────────────────────────── */}
+            <section style={{ minHeight: 400 }}>
               <Microscope result={result} domain={selectedDomain} error={error} />
             </section>
           </main>
 
+          {/* ── Right parameters panel — fixed width, never crushes center */}
           <RightPanel
             domain={selectedDomain}
             params={params}
