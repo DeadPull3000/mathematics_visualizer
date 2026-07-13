@@ -29,8 +29,12 @@ import {
   processObject,
   type InputType,
   type MathResponse,
+  type TopologyMetadata,
   ApiError,
 } from "@/lib/api";
+
+// Make TopologyMetadata available to components in this file
+type _TopologyMetadata = TopologyMetadata;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -617,7 +621,19 @@ export default function HomePage() {
       const response = await processObject(inputType, rawData);
       setResult(response);
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : String(err));
+      // Extract the most human-readable message from any error shape:
+      //   ApiError  → err.detail (set by apiFetch, includes HTTP context)
+      //   Error     → err.message (standard JS Error)
+      //   unknown   → String(err) as last resort
+      let msg: string;
+      if (err instanceof ApiError) {
+        msg = err.detail;
+      } else if (err instanceof Error) {
+        msg = err.message;
+      } else {
+        msg = String(err);
+      }
+      setError(msg);
     } finally { setIsLoading(false); }
   }, [selectedDomain, inputMode, pastedText, formulaText, fileContent]);
 

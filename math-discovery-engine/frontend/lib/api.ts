@@ -3,9 +3,11 @@
  * -------------------------------------------------------------------------
  * Typed API client for the Visual Mathematical Discovery Engine.
  *
- * Step 2 update: mirrors the new MathRequest / MathResponse backend schemas.
- * All parsing is delegated entirely to the backend -- the frontend only sends
- * the raw text and the input mode; it never tries to validate mathematics.
+ * Step 3 update:
+ *   - All responses are read as raw text FIRST (never blindly .json()).
+ *   - Empty bodies and non-JSON payloads are caught and reported cleanly.
+ *   - TopologyMetadata / updated MathResponse schemas added.
+ *   - All parsing is delegated entirely to the backend.
  */
 
 // --- Configuration -----------------------------------------------------------
@@ -47,6 +49,22 @@ export interface GraphMetadata {
   is_planar: boolean | null;
 }
 
+/** Spectral topology features (mirrors TopologyMetadata). */
+export interface TopologyMetadata {
+  /** Sorted eigenvalues of the combinatorial Laplacian. */
+  laplacian_eigenvalues: number[];
+  /**
+   * Fiedler vector: mapping from node ID (string key) to its float value.
+   * Identifies the optimal spectral bi-partition of the graph.
+   */
+  fiedler_vector: Record<string, number>;
+  /**
+   * Second-smallest Laplacian eigenvalue — the algebraic connectivity.
+   * λ₂ = 0 iff the graph is disconnected.
+   */
+  algebraic_connectivity: number;
+}
+
 /** Response from POST /api/process-object */
 export interface MathResponse {
   /** Sorted list of node identifiers (number | string). */
@@ -55,6 +73,8 @@ export interface MathResponse {
   edges: (number | string)[][];
   /** Computed topological invariants. */
   metadata: GraphMetadata;
+  /** Spectral graph theory metrics (Laplacian). */
+  topology: TopologyMetadata;
 }
 
 /** Response from GET /health */
@@ -78,10 +98,39 @@ export class ApiError extends Error {
   }
 }
 
+// --- Bulletproof JSON parser --------------------------------------------------
+
+/**
+ * Safely parse a response:
+ *  1. Read as plain text so we never hit "Unexpected end of JSON input".
+ *  2. Reject empty bodies explicitly.
+ *  3. Wrap JSON.parse in try/catch and report the raw body prefix on failure.
+ */
+function safeParseJSON<T>(text: string, status: number): T {
+  if (!text || text.trim() === "") {
+    throw new ApiError(
+      status,
+      "The backend returned an empty response. It may have crashed — check the uvicorn terminal."
+    );
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const preview = text.substring(0, 120).replace(/\n/g, " ");
+    throw new ApiError(
+      status,
+      `Failed to parse JSON from backend. Response started with: "${preview}…"`
+    );
+  }
+}
+
 // --- Internal fetch helper ---------------------------------------------------
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
+
+  // ── 1. Network-level failures (offline, wrong port, CORS preflight) ──────
   let response: Response;
   try {
     response = await fetch(url, {
@@ -95,23 +144,38 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   } catch (networkError) {
     throw new ApiError(
       0,
-      "Network error — is the backend running on port 8000?",
-      String(networkError)
+      `Network error — is the FastAPI backend running on port 8000?\n\nDetail: ${String(networkError)}`
     );
   }
 
+  // ── 2. Always read as text first — never trust .json() ───────────────────
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (readError) {
+    throw new ApiError(
+      response.status,
+      `Could not read response body: ${String(readError)}`
+    );
+  }
+
+  // ── 3. Non-2xx: try to extract a detail message, fall back to raw text ───
   if (!response.ok) {
     let detail = `HTTP ${response.status} ${response.statusText}`;
-    try {
-      const body = await response.json();
-      detail = body?.detail ?? detail;
-    } catch {
-      // keep the generic message if the error body is not JSON
+    if (text && text.trim() !== "") {
+      try {
+        const body = JSON.parse(text) as { detail?: string };
+        detail = body?.detail ?? detail;
+      } catch {
+        // FastAPI sometimes returns HTML for unhandled 500s — show a safe slice
+        detail = text.substring(0, 200).replace(/\s+/g, " ").trim();
+      }
     }
     throw new ApiError(response.status, detail);
   }
 
-  return response.json() as Promise<T>;
+  // ── 4. Successful response — parse JSON safely ───────────────────────────
+  return safeParseJSON<T>(text, response.status);
 }
 
 // --- Public API functions ----------------------------------------------------
