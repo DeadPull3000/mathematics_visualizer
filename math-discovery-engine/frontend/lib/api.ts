@@ -1,59 +1,63 @@
-/**
+﻿/**
  * frontend/lib/api.ts
- * ─────────────────────────────────────────────────────────────────────────────
- * Client-side API utility for the Visual Mathematical Discovery Engine.
+ * -------------------------------------------------------------------------
+ * Typed API client for the Visual Mathematical Discovery Engine.
  *
- * All communication with the FastAPI backend goes through this module.
- * It is fully typed and throws structured errors that the UI can handle.
+ * Step 2 update: mirrors the new MathRequest / MathResponse backend schemas.
+ * All parsing is delegated entirely to the backend -- the frontend only sends
+ * the raw text and the input mode; it never tries to validate mathematics.
  */
 
-// ─── Configuration ───────────────────────────────────────────────────────────
+// --- Configuration -----------------------------------------------------------
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-// ─── Request / Response types (mirrors backend Pydantic schemas) ──────────────
+// --- Shared types (mirrors backend models.py) --------------------------------
 
-export type ObjectType = "graph" | "knot" | "circuit";
+/** The three parsing strategies accepted by the backend. */
+export type InputType = "edge_list" | "formula" | "json";
 
-export interface ProcessObjectRequest {
-  type: ObjectType;
-  data: Record<string, unknown>;
-  parameters?: Record<string, unknown>;
+/** Request body for POST /api/process-object */
+export interface MathRequest {
+  /** How raw_data should be parsed. */
+  input_type: InputType;
+  /** The raw user text — completely unprocessed. */
+  raw_data: string;
 }
 
-export interface NodePayload {
-  id: string;
-  label: string;
-  x: number;
-  y: number;
-  z: number;
-  weight: number;
-  group: string;
+/** Topological invariants of the parsed graph (mirrors GraphMetadata). */
+export interface GraphMetadata {
+  /** |V|: cardinality of the vertex set. */
+  num_nodes: number;
+  /** |E|: cardinality of the edge set. */
+  num_edges: number;
+  /**
+   * Graph density: 2|E| / (|V|(|V|-1)).
+   * 0 = empty graph, 1 = complete graph.
+   */
+  density: number;
+  /** True if all vertices are reachable from each other. */
+  is_connected: boolean;
+  /** beta_0: the 0th Betti number = number of connected components. */
+  num_connected_components: number;
+  /**
+   * True if the graph is planar (Boyer-Myrvold test).
+   * null if the planarity test was skipped for large graphs (|E| > 1000).
+   */
+  is_planar: boolean | null;
 }
 
-export interface EdgePayload {
-  source: string;
-  target: string;
-  weight: number;
+/** Response from POST /api/process-object */
+export interface MathResponse {
+  /** Sorted list of node identifiers (number | string). */
+  nodes: (number | string)[];
+  /** Edge list as [source, target] pairs. */
+  edges: (number | string)[][];
+  /** Computed topological invariants. */
+  metadata: GraphMetadata;
 }
 
-export interface InvariantPayload {
-  name: string;
-  value: unknown;
-  description: string;
-}
-
-export interface ProcessObjectResponse {
-  request_id: string;
-  status: "success" | "error";
-  object_type: ObjectType;
-  nodes: NodePayload[];
-  edges: EdgePayload[];
-  invariants: InvariantPayload[];
-  computation_time_ms: number;
-  message: string;
-}
-
+/** Response from GET /health */
 export interface HealthResponse {
   status: string;
   service: string;
@@ -61,7 +65,7 @@ export interface HealthResponse {
   libraries: Record<string, string>;
 }
 
-// ─── Typed error class ────────────────────────────────────────────────────────
+// --- Typed error class -------------------------------------------------------
 
 export class ApiError extends Error {
   constructor(
@@ -74,14 +78,10 @@ export class ApiError extends Error {
   }
 }
 
-// ─── Internal fetch helper ────────────────────────────────────────────────────
+// --- Internal fetch helper ---------------------------------------------------
 
-async function apiFetch<T>(
-  path: string,
-  options?: RequestInit
-): Promise<T> {
+async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
-
   let response: Response;
   try {
     response = await fetch(url, {
@@ -106,7 +106,7 @@ async function apiFetch<T>(
       const body = await response.json();
       detail = body?.detail ?? detail;
     } catch {
-      // ignore JSON parse failure; keep the generic message
+      // keep the generic message if the error body is not JSON
     }
     throw new ApiError(response.status, detail);
   }
@@ -114,53 +114,46 @@ async function apiFetch<T>(
   return response.json() as Promise<T>;
 }
 
-// ─── Public API functions ─────────────────────────────────────────────────────
+// --- Public API functions ----------------------------------------------------
 
 /**
- * Liveness probe.
- * @returns HealthResponse from the backend.
+ * Liveness probe — call before the first user interaction.
  */
 export async function checkHealth(): Promise<HealthResponse> {
   return apiFetch<HealthResponse>("/health");
 }
 
 /**
- * Send a mathematical object to the backend for invariant computation.
+ * Send raw user input to the backend for parsing and invariant computation.
+ *
+ * The backend selects the appropriate parser based on `inputType` and returns
+ * the parsed graph as a 1-skeleton together with topological metadata.
+ *
+ * @param inputType  "edge_list" | "formula" | "json"
+ * @param rawData    The raw user text (unvalidated on the frontend)
  *
  * @example
- * const result = await processObject("graph", {
- *   nodes: [0, 1, 2, 3],
- *   edges: [[0,1],[1,2],[2,3],[3,0],[0,2]],
- * });
- * console.log(result.invariants);
+ * // Edge list
+ * const result = await processObject("edge_list", "0 1\n1 2\n2 3\n3 0");
  *
- * @param type     Object category — "graph" | "knot" | "circuit"
- * @param data     Domain-specific representation
- * @param params   Advanced parameters (filtration radius, GNN layers…)
+ * @example
+ * // Formula
+ * const result = await processObject("formula", "K_5");
+ *
+ * @example
+ * // JSON file content
+ * const result = await processObject("json", fileContentString);
  */
 export async function processObject(
-  type: ObjectType,
-  data: Record<string, unknown> = {},
-  params: Record<string, unknown> = {}
-): Promise<ProcessObjectResponse> {
-  const payload: ProcessObjectRequest = {
-    type,
-    data,
-    parameters: params,
+  inputType: InputType,
+  rawData: string
+): Promise<MathResponse> {
+  const body: MathRequest = {
+    input_type: inputType,
+    raw_data: rawData,
   };
-
-  console.group(`[API] POST /api/process-object — type: "${type}"`);
-  console.log("Request payload:", payload);
-
-  const result = await apiFetch<ProcessObjectResponse>("/api/process-object", {
+  return apiFetch<MathResponse>("/api/process-object", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
-
-  console.log("Response:", result);
-  console.log(`  ✓ ${result.nodes.length} nodes, ${result.edges.length} edges`);
-  console.log(`  ✓ ${result.invariants.length} invariants computed in ${result.computation_time_ms} ms`);
-  console.groupEnd();
-
-  return result;
 }
