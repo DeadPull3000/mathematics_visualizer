@@ -668,7 +668,7 @@ export default function HomePage() {
             </div>
 
             {/* Dropzone card */}
-            <section style={{ background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: 280 }}>
+            <section style={{ flexShrink: 0, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: 280 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>⬆ Input / Data Source</span>
                 <span style={{ color: "#888C8E", fontSize: 10 }}>All parsing is performed server-side</span>
@@ -709,7 +709,7 @@ export default function HomePage() {
             </button>
 
             {/* Structure Microscope */}
-            <section style={{ minHeight: 400 }}>
+            <section style={{ flexShrink: 0, minHeight: 400 }}>
               <Microscope result={result} domain={selectedDomain} error={error} />
             </section>
           </main>
