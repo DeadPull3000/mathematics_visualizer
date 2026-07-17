@@ -32,9 +32,7 @@ import {
   type TopologyMetadata,
   ApiError,
 } from "@/lib/api";
-
-// Make TopologyMetadata available to components in this file
-type _TopologyMetadata = TopologyMetadata;
+import GraphVisualizer from "@/components/GraphVisualizer";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -369,6 +367,9 @@ function EmptyMicroscope({ domain }: { domain: Domain }) {
 // Microscope — result view (renders MathResponse.metadata)
 // ---------------------------------------------------------------------------
 
+// Suppress unused-type warning — TopologyMetadata is used as a JSDoc anchor
+type _TopologyMetadata = TopologyMetadata;
+
 function ResultView({ result, domain }: { result: MathResponse; domain: Domain }) {
   const m = result.metadata;
   const densityColor = m.density > 0.7 ? "#C05640" : m.density > 0.3 ? "#D19E4A" : "#6B8075";
@@ -443,41 +444,66 @@ function ResultView({ result, domain }: { result: MathResponse; domain: Domain }
         </table>
       </div>
 
-      {/* 1-skeleton circular preview */}
+      {/* ── 3D Force-Directed Graph ─────────────────────────────── */}
       <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
         <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.08em", marginBottom: 8, textTransform: "uppercase" }}>
-          1-Skeleton Preview (force-directed 3D rendering · Step 3)
+          1-Skeleton · 3D Force Graph (WebGL) · nodes coloured by Fiedler vector
         </div>
-        <div style={{ position: "relative", height: 80, overflow: "hidden" }}>
-          {result.edges.slice(0, 60).map((edge, idx) => {
-            const total = Math.min(result.nodes.length, 40);
-            const uIdx = result.nodes.findIndex((n) => n === edge[0]);
-            const vIdx = result.nodes.findIndex((n) => n === edge[1]);
-            if (uIdx < 0 || vIdx < 0 || uIdx >= 40 || vIdx >= 40) return null;
-            const rx = 44, ry = 38;
-            const aU = (uIdx / total) * 2 * Math.PI;
-            const aV = (vIdx / total) * 2 * Math.PI;
-            const x1 = 50 + rx * Math.cos(aU), y1 = 50 + ry * Math.sin(aU);
-            const x2 = 50 + rx * Math.cos(aV), y2 = 50 + ry * Math.sin(aV);
-            return (
-              <svg key={idx} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
-                <line x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} stroke={domain.color} strokeWidth={0.6} opacity={0.3} />
-              </svg>
-            );
-          })}
-          {result.nodes.slice(0, 40).map((node, idx) => {
-            const total = Math.min(result.nodes.length, 40);
-            const angle = (idx / total) * 2 * Math.PI;
-            const rx = 44, ry = 38;
-            const cx = 50 + rx * Math.cos(angle), cy = 50 + ry * Math.sin(angle);
-            return (
-              <div key={String(node)} title={`Node ${node}`}
-                style={{ position: "absolute", width: 6, height: 6, borderRadius: "50%", background: domain.color, opacity: 0.75, left: `${cx}%`, top: `${cy}%`, transform: "translate(-50%, -50%)", transition: "all 0.4s ease" }}
-              />
-            );
-          })}
-        </div>
+        <GraphVisualizer
+          nodes={result.nodes}
+          edges={result.edges}
+          fiedlerVector={result.topology?.fiedler_vector}
+          height={380}
+        />
       </div>
+
+      {/* ── Spectral Stats Grid ─────────────────────────────────── */}
+      {result.topology && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {/* Algebraic Connectivity */}
+          <div style={{ background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 18px" }}>
+            <div style={{ color: "#888C8E", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
+              Algebraic Connectivity  λ₂
+            </div>
+            <div style={{ color: "#D19E4A", fontSize: 22, fontWeight: 700, fontFamily: "'Georgia', serif", marginBottom: 4 }}>
+              {result.topology.algebraic_connectivity.toFixed(4)}
+            </div>
+            <div style={{ color: "#888C8E", fontSize: 10, lineHeight: 1.6 }}>
+              λ₂ = 0 → disconnected graph<br />
+              λ₂ ↑ → more robust connectivity
+            </div>
+          </div>
+
+          {/* Laplacian Spectrum */}
+          <div style={{ background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 18px" }}>
+            <div style={{ color: "#888C8E", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
+              Laplacian Spectrum  (first 5 eigenvalues)
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              {result.topology.laplacian_eigenvalues.slice(0, 5).map((ev, i) => (
+                <span
+                  key={i}
+                  style={{
+                    background: i === 0 ? "#6B807520" : i === 1 ? "#D19E4A20" : "#2C3133",
+                    border: `1px solid ${i === 0 ? "#6B8075" : i === 1 ? "#D19E4A" : "#2C3133"}`,
+                    color: i === 0 ? "#6B8075" : i === 1 ? "#D19E4A" : "#E6E4DF",
+                    borderRadius: 5,
+                    padding: "3px 10px",
+                    fontFamily: "'Courier New', monospace",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                >
+                  {ev.toFixed(4)}
+                </span>
+              ))}
+            </div>
+            <div style={{ color: "#888C8E", fontSize: 10, lineHeight: 1.6 }}>
+              <span style={{ color: "#6B8075" }}>λ₁ = 0</span> always · <span style={{ color: "#D19E4A" }}>λ₂</span> = Fiedler value
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
