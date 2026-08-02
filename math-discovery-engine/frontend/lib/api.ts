@@ -71,6 +71,12 @@ export interface TopologyMetadata {
    *   β₂ — enclosed 2D voids / bubbles
    */
   betti_numbers: number[];
+  /**
+   * Gradient saliency scores from the PyTorch GCN engine.
+   * Maps node ID (string key) to a normalized float between 0.0 and 1.0.
+   * Higher values indicate structurally anomalous / salient nodes.
+   */
+  saliency_scores?: Record<string, number>;
 }
 
 /** Response from POST /api/process-object */

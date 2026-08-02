@@ -370,7 +370,21 @@ function EmptyMicroscope({ domain }: { domain: Domain }) {
 // Suppress unused-type warning — TopologyMetadata is used as a JSDoc anchor
 type _TopologyMetadata = TopologyMetadata;
 
-function ResultView({ result, domain }: { result: MathResponse; domain: Domain }) {
+function ResultView({
+  result,
+  domain,
+  viewMode,
+  setViewMode,
+  onEdgeRemove,
+  deletedEdges,
+}: {
+  result: MathResponse;
+  domain: Domain;
+  viewMode: "spectral" | "saliency";
+  setViewMode: (m: "spectral" | "saliency") => void;
+  onEdgeRemove?: (source: string | number, target: string | number) => void;
+  deletedEdges?: (string | number)[][];
+}) {
   const m = result.metadata;
   const densityColor = m.density > 0.7 ? "#C05640" : m.density > 0.3 ? "#D19E4A" : "#6B8075";
   const densityPct = (m.density * 100).toFixed(1);
@@ -452,14 +466,104 @@ function ResultView({ result, domain }: { result: MathResponse; domain: Domain }
 
       {/* ── 3D Force-Directed Graph ─────────────────────────────── */}
       <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
-        <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.08em", marginBottom: 8, textTransform: "uppercase" }}>
-          1-Skeleton · 3D Force Graph (WebGL) · nodes coloured by Fiedler vector
+        {/* Header row with title + toggle */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            1-Skeleton · 3D Force Graph (WebGL)
+          </div>
+          {/* View Mode Toggle — premium segmented control */}
+          <div
+            id="view-mode-toggle"
+            style={{
+              display: "flex",
+              background: "#1C1F21",
+              border: "1px solid #2C3133",
+              borderRadius: 8,
+              padding: 3,
+              gap: 2,
+            }}
+          >
+            {(["spectral", "saliency"] as const).map((mode) => {
+              const isActive = viewMode === mode;
+              const labels: Record<string, string> = {
+                spectral: "⟡ Spectral Clusters",
+                saliency: "◈ Gradient Saliency",
+              };
+              return (
+                <button
+                  key={mode}
+                  id={`view-toggle-${mode}`}
+                  onClick={() => setViewMode(mode)}
+                  style={{
+                    background: isActive
+                      ? mode === "saliency" ? "#C05640" : "#6B8075"
+                      : "transparent",
+                    border: "none",
+                    borderRadius: 6,
+                    color: isActive ? "#E6E4DF" : "#888C8E",
+                    cursor: "pointer",
+                    fontSize: 10,
+                    fontWeight: isActive ? 700 : 400,
+                    letterSpacing: "0.04em",
+                    padding: "5px 12px",
+                    transition: "all 0.2s ease",
+                    whiteSpace: "nowrap",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive)
+                      (e.currentTarget as HTMLButtonElement).style.color = "#E6E4DF";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive)
+                      (e.currentTarget as HTMLButtonElement).style.color = "#888C8E";
+                  }}
+                >
+                  {labels[mode]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {/* Active view legend pill */}
+        <div style={{ marginBottom: 8 }}>
+          {viewMode === "spectral" ? (
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              {[
+                { color: "#C05640", label: "Partition A  (Fiedler > 0)" },
+                { color: "#6B8075", label: "Partition B  (Fiedler < 0)" },
+                { color: "#D19E4A", label: "Bridge / Isolated" },
+              ].map(({ color, label }) => (
+                <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E", letterSpacing: "0.04em" }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
+                  {label}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              {[
+                { color: "#C05640", label: "High Saliency  (> 0.6)" },
+                { color: "#D19E4A", label: "Moderate  (0.3–0.6)" },
+                { color: "#888C8E", label: "Low  (< 0.3)" },
+              ].map(({ color, label }) => (
+                <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E", letterSpacing: "0.04em" }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
+                  {label}
+                </span>
+              ))}
+              <span style={{ fontSize: 9, color: "#888C8E", marginLeft: 4 }}>· node size ∝ saliency score</span>
+            </div>
+          )}
         </div>
         <GraphVisualizer
           nodes={result.nodes}
           edges={result.edges}
+          deletedEdges={deletedEdges}
           fiedlerVector={result.topology?.fiedler_vector}
+          saliencyScores={result.topology?.saliency_scores}
+          viewMode={viewMode}
           height={380}
+          onEdgeRemove={onEdgeRemove}
         />
       </div>
 
@@ -548,7 +652,25 @@ function ResultView({ result, domain }: { result: MathResponse; domain: Domain }
 // Microscope wrapper
 // ---------------------------------------------------------------------------
 
-function Microscope({ result, domain, error }: { result: MathResponse | null; domain: Domain; error: string | null }) {
+function Microscope({
+  result,
+  domain,
+  error,
+  viewMode,
+  setViewMode,
+  onEdgeRemove,
+  perturbationCount,
+  deletedEdges,
+}: {
+  result: MathResponse | null;
+  domain: Domain;
+  error: string | null;
+  viewMode: "spectral" | "saliency";
+  setViewMode: (m: "spectral" | "saliency") => void;
+  onEdgeRemove?: (source: string | number, target: string | number) => void;
+  perturbationCount?: number;
+  deletedEdges?: (string | number)[][];
+}) {
   return (
     <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 400 }}>
       <div style={{ padding: "12px 18px", borderBottom: "1px solid #2C3133", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
@@ -557,9 +679,29 @@ function Microscope({ result, domain, error }: { result: MathResponse | null; do
           <span style={{ color: "#E6E4DF", fontSize: 12, fontWeight: 600, letterSpacing: "0.06em" }}>STRUCTURE MICROSCOPE</span>
         </div>
         {result && (
-          <span style={{ background: "#6B807520", border: "1px solid #6B8075", color: "#6B8075", borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
-            {result.metadata.num_nodes}V · {result.metadata.num_edges}E
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ background: "#6B807520", border: "1px solid #6B8075", color: "#6B8075", borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
+              {result.metadata.num_nodes}V · {result.metadata.num_edges}E
+            </span>
+            {perturbationCount !== undefined && perturbationCount > 0 && (
+              <span
+                title={`${perturbationCount} edge${perturbationCount === 1 ? "" : "s"} removed by interactive perturbation`}
+                style={{
+                  background: "#C0564020",
+                  border: "1px solid #C05640",
+                  color: "#C05640",
+                  borderRadius: 6,
+                  padding: "2px 10px",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  animation: "pulse 1.8s ease-in-out 1",
+                }}
+              >
+                −{perturbationCount}E perturbed
+              </span>
+            )}
+          </div>
         )}
       </div>
       <div style={{ flex: 1, display: "flex", alignItems: error || !result ? "center" : "flex-start", justifyContent: error || !result ? "center" : "flex-start", padding: 24, overflowY: "auto" }}>
@@ -572,7 +714,7 @@ function Microscope({ result, domain, error }: { result: MathResponse | null; do
             </div>
           </div>
         ) : result ? (
-          <ResultView result={result} domain={domain} />
+          <ResultView result={result} domain={domain} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={onEdgeRemove} deletedEdges={deletedEdges} />
         ) : (
           <EmptyMicroscope domain={domain} />
         )}
@@ -585,10 +727,16 @@ function Microscope({ result, domain, error }: { result: MathResponse | null; do
 // Right Parameters Panel
 // ---------------------------------------------------------------------------
 
-function RightPanel({ domain, params, setParams, isOpen, setIsOpen }: {
-  domain: Domain; params: Record<string, number>;
+function RightPanel({
+  domain, params, setParams, isOpen, setIsOpen,
+  history,
+}: {
+  domain: Domain;
+  params: Record<string, number>;
   setParams: (p: Record<string, number>) => void;
-  isOpen: boolean; setIsOpen: (v: boolean) => void;
+  isOpen: boolean;
+  setIsOpen: (v: boolean) => void;
+  history: { id: string; type: "genesis" | "cut"; detail: string }[];
 }) {
   const sliders = [
     { key: "max_filtration_radius", label: "Max Filtration Radius", min: 0.1, max: 5, step: 0.1, description: "Controls the Cech/Vietoris-Rips complex scale" },
@@ -611,20 +759,67 @@ function RightPanel({ domain, params, setParams, isOpen, setIsOpen }: {
 
       {isOpen && (
         <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: 20, overflowY: "auto" }}>
-          {sliders.map((s) => (
-            <div key={s.key}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ color: "#E6E4DF", fontSize: 11, fontWeight: 500 }}>{s.label}</span>
-                <span style={{ color: domain.color, fontSize: 11, fontFamily: "'Courier New', monospace", fontWeight: 700 }}>{params[s.key] ?? defaultVal(s.key)}</span>
+
+          {/* ── Perturbation Ledger ──────────────────────────────────────── */}
+          {history.length > 0 && (
+            <div>
+              <div style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
+                ⊕ Perturbation Ledger
               </div>
-              <input id={`param-${s.key}`} type="range" min={s.min} max={s.max} step={s.step} value={params[s.key] ?? defaultVal(s.key)}
-                onChange={(e) => setParams({ ...params, [s.key]: parseFloat(e.target.value) })}
-                style={{ width: "100%", accentColor: domain.color, cursor: "pointer" }}
-              />
-              <div style={{ color: "#888C8E", fontSize: 9, marginTop: 4, lineHeight: 1.5 }}>{s.description}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                {history.map((entry, i) => {
+                  const isGenesis = entry.type === "genesis";
+                  const color = isGenesis ? "#6B8075" : "#C05640";
+                  const isLast = i === history.length - 1;
+                  return (
+                    <div key={entry.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                        <div style={{
+                          width: 10, height: 10, borderRadius: "50%",
+                          background: color, flexShrink: 0,
+                          boxShadow: `0 0 6px ${color}88`,
+                          marginTop: 2,
+                        }} />
+                        {!isLast && (
+                          <div style={{ width: 1, flex: 1, background: "#2C3133", minHeight: 18, marginTop: 2 }} />
+                        )}
+                      </div>
+                      <div style={{ paddingBottom: isLast ? 0 : 14 }}>
+                        <div style={{ color, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", lineHeight: 1 }}>
+                          {isGenesis ? "GENESIS" : "CUT"}
+                        </div>
+                        <div style={{ color: "#888C8E", fontSize: 9, marginTop: 3, lineHeight: 1.5, fontFamily: "'Courier New', monospace" }}>
+                          {entry.detail}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          ))}
-          <div style={{ marginTop: 8, padding: "12px", background: "#141617", borderRadius: 8, border: "1px solid #2C3133" }}>
+          )}
+
+          {/* ── Advanced parameter sliders ────────────────────────────────── */}
+          <div>
+            <div style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
+              ⊙ Advanced Parameters
+            </div>
+            {sliders.map((s) => (
+              <div key={s.key} style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ color: "#E6E4DF", fontSize: 11, fontWeight: 500 }}>{s.label}</span>
+                  <span style={{ color: domain.color, fontSize: 11, fontFamily: "'Courier New', monospace", fontWeight: 700 }}>{params[s.key] ?? defaultVal(s.key)}</span>
+                </div>
+                <input id={`param-${s.key}`} type="range" min={s.min} max={s.max} step={s.step} value={params[s.key] ?? defaultVal(s.key)}
+                  onChange={(e) => setParams({ ...params, [s.key]: parseFloat(e.target.value) })}
+                  style={{ width: "100%", accentColor: domain.color, cursor: "pointer" }}
+                />
+                <div style={{ color: "#888C8E", fontSize: 9, marginTop: 4, lineHeight: 1.5 }}>{s.description}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ padding: "12px", background: "#141617", borderRadius: 8, border: "1px solid #2C3133" }}>
             <div style={{ color: "#888C8E", fontSize: 9, lineHeight: 1.7 }}>
               <span style={{ color: domain.color, fontWeight: 600 }}>Professor mode</span><br />
               These parameters will tune the persistent homology pipeline and GNN architecture in Step 3.
@@ -655,6 +850,14 @@ export default function HomePage() {
     max_filtration_radius: 1.5, gnn_layers: 3,
     persistence_threshold: 0.1, homology_degree: 1,
   });
+  const [viewMode, setViewMode] = useState<"spectral" | "saliency">("spectral");
+  // currentEdges tracks the live edge list after any user perturbations.
+  const [currentEdges, setCurrentEdges] = useState<(string | number)[][]>([]);
+  const [perturbationCount, setPerturbationCount] = useState(0);
+  // deletedEdges: kept in 3D as ghost strands, removed from maths.
+  const [deletedEdges, setDeletedEdges] = useState<(string | number)[][]>([]);
+  // history: the Laboratory Ledger timeline.
+  const [history, setHistory] = useState<{ id: string; type: "genesis" | "cut"; detail: string }[]>([]);
 
   useEffect(() => { setResult(null); setError(null); }, [selectedDomain]);
 
@@ -682,6 +885,10 @@ export default function HomePage() {
       }
       const response = await processObject(inputType, rawData);
       setResult(response);
+      setCurrentEdges(response.edges);
+      setDeletedEdges([]);
+      setPerturbationCount(0);
+      setHistory([{ id: "genesis", type: "genesis", detail: `Origin: ${rawData.slice(0, 40).replace(/\n/g, " · ")}` }]);
     } catch (err) {
       // Extract the most human-readable message from any error shape:
       //   ApiError  → err.detail (set by apiFetch, includes HTTP context)
@@ -698,6 +905,57 @@ export default function HomePage() {
       setError(msg);
     } finally { setIsLoading(false); }
   }, [selectedDomain, inputMode, pastedText, formulaText, fileContent]);
+
+  /**
+   * handleEdgeRemove — called by GraphVisualizer when the user clicks an edge.
+   * Filters out the clicked edge from currentEdges, serialises the remainder
+   * as an edge_list string, and silently re-submits to the backend for a full
+   * topology + AI saliency recalculation.
+   */
+  const handleEdgeRemove = useCallback(
+    async (source: string | number, target: string | number) => {
+      const src = String(source);
+      const tgt = String(target);
+
+      // Filter the clicked edge out of the active edge list (undirected).
+      const nextEdges = currentEdges.filter(([u, v]) => {
+        const us = String(u);
+        const vs = String(v);
+        return !((us === src && vs === tgt) || (us === tgt && vs === src));
+      });
+
+      if (nextEdges.length === 0) return; // refuse empty graph
+
+      // Record the deleted edge as a ghost and in the ledger.
+      setDeletedEdges((prev) => [...prev, [src, tgt]]);
+      setCurrentEdges(nextEdges);
+      setPerturbationCount((c) => c + 1);
+      setHistory((prev) => [
+        ...prev,
+        { id: Date.now().toString(), type: "cut", detail: `Cut (${src}, ${tgt})` },
+      ]);
+
+      // Serialise remaining edges as a plain edge_list string.
+      const rawData = nextEdges.map(([u, v]) => `${u} ${v}`).join("\n");
+
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await processObject("edge_list", rawData);
+        setResult(response);
+        setCurrentEdges(response.edges);
+      } catch (err) {
+        let msg: string;
+        if (err instanceof ApiError) msg = err.detail;
+        else if (err instanceof Error) msg = err.message;
+        else msg = String(err);
+        setError(msg);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [currentEdges]
+  );
 
   return (
     <>
@@ -788,12 +1046,12 @@ export default function HomePage() {
 
             {/* Structure Microscope */}
             <section style={{ flexShrink: 0, minHeight: 400 }}>
-              <Microscope result={result} domain={selectedDomain} error={error} />
+              <Microscope result={result} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={handleEdgeRemove} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
             </section>
           </main>
 
           {/* Right panel */}
-          <RightPanel domain={selectedDomain} params={params} setParams={setParams} isOpen={paramsOpen} setIsOpen={setParamsOpen} />
+          <RightPanel domain={selectedDomain} params={params} setParams={setParams} isOpen={paramsOpen} setIsOpen={setParamsOpen} history={history} />
         </div>
       </div>
     </>

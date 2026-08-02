@@ -1,4 +1,4 @@
-﻿"""
+"""
 Visual Mathematical Discovery Engine - Graph Parsers (Step 2)
 =============================================================
 Converts raw user input strings into validated NetworkX graph objects
@@ -35,11 +35,11 @@ MAX_NODES: Final[int] = 2_000
 MAX_EDGES: Final[int] = 10_000
 
 # --- Formula regex ------------------------------------------------------------
-# Matches K_n, C_n, P_n (case-insensitive), with optional leading/trailing
-# whitespace and zero-padded integers (e.g. K_05 -> K_5).
+# Matches various graph formulas with case-insensitive prefixes and arguments
+# separated by underscores. Examples: K_5, B_5_2, ER_10_0.5
 
 _FORMULA_RE: Final[re.Pattern[str]] = re.compile(
-    r"^\s*(?P<kind>[KCPkcp])_(?P<n>0*[1-9]\d*)\s*$"
+    r"^\s*(?P<kind>[a-zA-Z]+)_(?P<args>[0-9]+(?:_[0-9.]+)*)\s*$"
 )
 
 # --- Internal helpers ---------------------------------------------------------
@@ -186,20 +186,21 @@ def parse_formula(raw_data: str) -> nx.Graph:
     | K_n    | Complete graph on n vertices     | ``nx.complete_graph(n)``    |
     | C_n    | Cycle graph on n vertices        | ``nx.cycle_graph(n)``       |
     | P_n    | Path graph on n vertices         | ``nx.path_graph(n)``        |
+    | S_n    | Star graph on n vertices         | ``nx.star_graph(n)``        |
+    | B_n_m  | Barbell graph                    | ``nx.barbell_graph(n, m)``  |
+    | G_n_m  | 2D Grid graph                    | ``nx.grid_2d_graph(n, m)``  |
+    | ER_n_p | Erdos-Renyi graph                | ``nx.erdos_renyi_graph(n,p)``|
     +--------+----------------------------------+-----------------------------+
 
     Notes
     -----
-    - The match is case-insensitive: ``k_5``, ``K_5``, and ``K_05`` all
-      produce the same K_5 complete graph.
-    - n must be a positive integer (zero is rejected).
-    - For K_n the number of edges is n*(n-1)/2; K_142 already produces
-      ~10,000 edges and will be rejected by the safety check.
+    - The match is case-insensitive (e.g., k_5, K_5).
+    - Grid graphs have their tuple node labels converted to strings.
 
     Parameters
     ----------
     raw_data : str
-        A formula string such as "K_5", "C_6", or "P_4".
+        A formula string such as "K_5", "B_3_2", or "ER_10_0.5".
 
     Returns
     -------
@@ -210,28 +211,56 @@ def parse_formula(raw_data: str) -> nx.Graph:
     ------
     ValueError
         - If the formula does not match the expected pattern.
-        - If n <= 0.
+        - If parameters are invalid.
         - If the resulting graph exceeds the safety size limits.
     """
     match = _FORMULA_RE.match(raw_data)
     if match is None:
         raise ValueError(
             f"[Formula] Could not parse {raw_data!r}. "
-            "Supported formats: K_n (complete graph), C_n (cycle graph), "
-            "P_n (path graph), where n is a positive integer. "
-            "Examples: 'K_5', 'C_6', 'P_4'. The match is case-insensitive."
+            "Supported formats: K_n (complete), C_n (cycle), P_n (path), S_n (star), "
+            "B_n_m (barbell), G_n_m (grid_2d), ER_n_p (erdos_renyi). "
+            "Examples: 'K_5', 'B_5_2', 'ER_10_0.5'. The match is case-insensitive."
         )
 
     kind = match.group("kind").upper()
-    n: int = int(match.group("n"))   # regex already guarantees n >= 1
+    args_str = match.group("args")
+    args = args_str.split("_")
 
-    # Dispatch to the correct NetworkX generator.
-    _GENERATORS = {
-        "K": nx.complete_graph,
-        "C": nx.cycle_graph,
-        "P": nx.path_graph,
-    }
-    graph: nx.Graph = _GENERATORS[kind](n)  # type: ignore[operator]
+    try:
+        if kind in ("K", "C", "P", "S") and len(args) == 1:
+            n = int(args[0])
+            if n <= 0:
+                raise ValueError("n must be a positive integer.")
+            if kind == "K": graph = nx.complete_graph(n)
+            elif kind == "C": graph = nx.cycle_graph(n)
+            elif kind == "P": graph = nx.path_graph(n)
+            elif kind == "S": graph = nx.star_graph(n)
+        elif kind in ("B", "G") and len(args) == 2:
+            n, m = int(args[0]), int(args[1])
+            if kind == "B":
+                if n < 2 or m < 0:
+                    raise ValueError("Barbell graph requires n >= 2 and m >= 0.")
+                graph = nx.barbell_graph(n, m)
+            elif kind == "G":
+                if n <= 0 or m <= 0:
+                    raise ValueError("Grid graph requires positive integers n and m.")
+                graph = nx.grid_2d_graph(n, m)
+                # Convert tuple node labels to strings to satisfy JSON/Pydantic schemas
+                nx.relabel_nodes(graph, {node: str(node) for node in graph.nodes()}, copy=False)
+        elif kind == "ER" and len(args) == 2:
+            n = int(args[0])
+            p = float(args[1])
+            if n <= 0 or not (0.0 <= p <= 1.0):
+                raise ValueError("n must be a positive integer and p must be between 0.0 and 1.0.")
+            graph = nx.erdos_renyi_graph(n, p)
+        else:
+            raise ValueError(f"Unknown formula or wrong number of arguments for {kind}.")
+    except ValueError as e:
+        # Wrap internal ValueError with context
+        if "[Formula]" not in str(e):
+            raise ValueError(f"[Formula] Invalid parameters for {raw_data!r}: {e}") from e
+        raise e
 
     _check_size(graph, "Formula")
     return graph
