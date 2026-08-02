@@ -77,57 +77,31 @@ def compute_spectral_topology(G: nx.Graph) -> dict:
 
 
 def compute_betti_numbers(G: nx.Graph, max_dimension: int = 3) -> list[int]:
-    """
-    Lifts the NetworkX 1-skeleton into a Simplicial (Clique) Complex and computes
-    its Betti numbers (beta_0, beta_1, beta_2) up to the specified max dimension.
-
-    Parameters
-    ----------
-    G : nx.Graph
-        The parsed NetworkX graph.
-    max_dimension : int
-        The maximum dimension to expand the cliques up to (default 3).
-
-    Returns
-    -------
-    list[int]
-        A list of Betti numbers, typically [beta_0, beta_1, beta_2].
-    """
     try:
-        if G.number_of_nodes() == 0:
-            return []
-
-        # Initialize the SimplexTree
-        simplex_tree = gudhi.SimplexTree()
-
-        # Iterate through the edges and insert them
-        # Nodes must be integers or mapped to integers for GUDHI, but GUDHI's Python
-        # wrapper actually accepts arbitrary types if we are careful, though usually 
-        # it prefers integers. Let's map nodes to integer indices just in case.
-        node_to_idx = {node: i for i, node in enumerate(G.nodes())}
+        st = gudhi.SimplexTree()
         
-        # Add 0-simplices (vertices) to ensure disconnected nodes are included
-        for node in G.nodes():
-            simplex_tree.insert([node_to_idx[node]])
-            
+        # FIX: GUDHI strictly requires standard Python integers. 
+        # We map whatever the node IDs are (strings, numpy ints) to pure ints.
+        node_to_int = {node: i for i, node in enumerate(G.nodes())}
+        
         for u, v in G.edges():
-            simplex_tree.insert([node_to_idx[u], node_to_idx[v]])
-
-        # Automatically fill in cliques up to max_dimension
-        simplex_tree.expansion(max_dimension)
-
-        # Compute persistence
-        simplex_tree.compute_persistence()
-
-        # Extract betti numbers
-        betti = simplex_tree.betti_numbers()
+            st.insert([node_to_int[u], node_to_int[v]])
+            
+        # Expand the complex to fill in triangles and tetrahedra
+        st.expansion(max_dimension)
         
-        # Ensure we return at least [beta_0, 0, 0] if the complex is simple
-        # and pad it up to max_dimension if needed by the frontend (optional, but
-        # the prompt expects [beta_0, beta_1, beta_2] style).
-        return betti
-
-    except Exception:
-        # Gracefully return a fallback if GUDHI fails (e.g. memory issues on dense graphs)
-        beta_0 = nx.number_connected_components(G) if G.number_of_nodes() > 0 else 0
-        return [beta_0, 0, 0]
+        # Compute persistence to find the topological holes
+        st.compute_persistence()
+        betti = st.betti_numbers()
+        
+        # FIX: For C_6, betti is [1, 1]. We need to pad it to [1, 1, 0] 
+        # so the frontend doesn't read undefined for Beta_2!
+        while len(betti) < 3:
+            betti.append(0)
+            
+        return betti[:3]
+        
+    except Exception as e:
+        # Let's print the error to the terminal so it doesn't fail silently anymore!
+        print(f"GUDHI CRASHED: {e}")
+        return [nx.number_connected_components(G), 0, 0]
