@@ -161,6 +161,10 @@ class TopologyMetadata(BaseModel):
         ...,
         description="Second smallest eigenvalue of the Laplacian (algebraic connectivity).",
     )
+    betti_numbers: list[int] = Field(
+        ...,
+        description="Betti numbers (beta_0, beta_1, beta_2) of the Simplicial Clique Complex.",
+    )
 
 
 class MathResponse(BaseModel):
