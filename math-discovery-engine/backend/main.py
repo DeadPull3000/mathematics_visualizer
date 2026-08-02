@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from models import GraphMetadata, MathRequest, MathResponse
 from parsers import parse_edge_list, parse_formula, parse_json
 from topology import compute_spectral_topology, compute_betti_numbers
+from ml_engine import compute_gradient_saliency
 
 # --- Logging ------------------------------------------------------------------
 
@@ -242,6 +243,7 @@ async def process_object(payload: MathRequest) -> MathResponse:
         metadata = _compute_metadata(graph)
         topology = compute_spectral_topology(graph)
         topology["betti_numbers"] = compute_betti_numbers(graph)
+        topology["saliency_scores"] = compute_gradient_saliency(graph)
     except Exception as exc:
         log.exception("Invariant/topology computation failed: %s", exc)
         raise HTTPException(

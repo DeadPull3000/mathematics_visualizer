@@ -165,6 +165,10 @@ class TopologyMetadata(BaseModel):
         ...,
         description="Betti numbers (beta_0, beta_1, beta_2) of the Simplicial Clique Complex.",
     )
+    saliency_scores: dict[Union[int, str], float] = Field(
+        ...,
+        description="Structural saliency scores mapping node ID to a float between 0.0 and 1.0.",
+    )
 
 
 class MathResponse(BaseModel):
