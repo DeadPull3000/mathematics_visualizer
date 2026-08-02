@@ -8,7 +8,6 @@ and computes the Fiedler vector (algebraic connectivity).
 import networkx as nx
 import numpy as np
 import scipy.linalg
-import gudhi
 
 
 def compute_spectral_topology(G: nx.Graph) -> dict:
@@ -76,32 +75,65 @@ def compute_spectral_topology(G: nx.Graph) -> dict:
     }
 
 
-def compute_betti_numbers(G: nx.Graph, max_dimension: int = 3) -> list[int]:
+def compute_betti_numbers(G: nx.Graph) -> list[int]:
+    """
+    Computes Betti 0, 1, and 2 using pure Linear Algebra and the Rank-Nullity Theorem 
+    on the Clique Complex of the graph. This is 100% stable and requires no C++ libraries.
+    """
+    if G.number_of_nodes() == 0:
+        return [0, 0, 0]
+        
     try:
-        st = gudhi.SimplexTree()
+        # 1. Find all cliques (simplices) in the graph
+        cliques = list(nx.enumerate_all_cliques(G))
         
-        # FIX: GUDHI strictly requires standard Python integers. 
-        # We map whatever the node IDs are (strings, numpy ints) to pure ints.
-        node_to_int = {node: i for i, node in enumerate(G.nodes())}
+        # 2. Group them by dimension k (k = size - 1)
+        # 0: Dots, 1: Sticks, 2: Triangles, 3: Tetrahedra
+        C = {0: [], 1: [], 2: [], 3: []}
+        for c in cliques:
+            k = len(c) - 1
+            if k <= 3:
+                # Sort to ensure consistent mathematical orientation
+                C[k].append(tuple(sorted(c)))
+                
+        n = [len(C[0]), len(C[1]), len(C[2]), len(C[3])]
         
-        for u, v in G.edges():
-            st.insert([node_to_int[u], node_to_int[v]])
+        # 3. Helper to build the Boundary Matrix D_k
+        def build_boundary_matrix(k):
+            # If we don't have shapes of this dimension, the matrix is empty
+            if n[k] == 0 or n[k-1] == 0:
+                return np.zeros((n[k-1], n[k]))
             
-        # Expand the complex to fill in triangles and tetrahedra
-        st.expansion(max_dimension)
-        
-        # Compute persistence to find the topological holes
-        st.compute_persistence()
-        betti = st.betti_numbers()
-        
-        # FIX: For C_6, betti is [1, 1]. We need to pad it to [1, 1, 0] 
-        # so the frontend doesn't read undefined for Beta_2!
-        while len(betti) < 3:
-            betti.append(0)
+            idx_k_minus_1 = {simplex: i for i, simplex in enumerate(C[k-1])}
+            M = np.zeros((n[k-1], n[k]))
             
-        return betti[:3]
+            for col_idx, simplex in enumerate(C[k]):
+                for i in range(k + 1):
+                    # The boundary is formed by removing the i-th node
+                    face = simplex[:i] + simplex[i+1:]
+                    if face in idx_k_minus_1:
+                        row_idx = idx_k_minus_1[face]
+                        # Alternating signs rule for topological boundaries
+                        M[row_idx, col_idx] = (-1) ** i
+            return M
+
+        # 4. Construct Boundary Matrices
+        D1 = build_boundary_matrix(1)
+        D2 = build_boundary_matrix(2)
+        D3 = build_boundary_matrix(3)
+        
+        # 5. Compute their ranks using numpy
+        r1 = np.linalg.matrix_rank(D1) if D1.size > 0 else 0
+        r2 = np.linalg.matrix_rank(D2) if D2.size > 0 else 0
+        r3 = np.linalg.matrix_rank(D3) if D3.size > 0 else 0
+        
+        # 6. Apply the Rank-Nullity Theorem to find Betti Numbers
+        b0 = n[0] - r1
+        b1 = n[1] - r1 - r2
+        b2 = n[2] - r2 - r3
+        
+        return [int(b0), int(b1), int(b2)]
         
     except Exception as e:
-        # Let's print the error to the terminal so it doesn't fail silently anymore!
-        print(f"GUDHI CRASHED: {e}")
+        print(f"Topology Math Error: {e}")
         return [nx.number_connected_components(G), 0, 0]
