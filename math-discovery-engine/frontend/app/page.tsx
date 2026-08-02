@@ -377,11 +377,17 @@ function ResultView({ result, domain }: { result: MathResponse; domain: Domain }
   const planarLabel = m.is_planar === null ? "Skipped (|E| > 1 000)" : m.is_planar ? "Yes ✓" : "No ✗";
   const planarColor = m.is_planar === null ? "#888C8E" : m.is_planar ? "#6B8075" : "#C05640";
 
+  const betti = result.topology?.betti_numbers ?? [];
+  const beta1 = betti[1] ?? 0;
+  const beta2 = betti[2] ?? 0;
+
   const rows = [
     { name: "Vertices |V|", value: m.num_nodes, color: "#D19E4A", desc: "Cardinality of the vertex set" },
     { name: "Edges |E|", value: m.num_edges, color: "#C05640", desc: "Cardinality of the edge set" },
     { name: "Connected", value: m.is_connected ? "Yes ✓" : "No ✗", color: m.is_connected ? "#6B8075" : "#C05640", desc: "All vertices reachable from each other" },
     { name: "β₀ Components", value: m.num_connected_components, color: m.num_connected_components === 1 ? "#6B8075" : "#D19E4A", desc: "0th Betti number — path-connected components" },
+    { name: "β₁ Cycles (Holes)", value: beta1, color: beta1 === 0 ? "#888C8E" : "#C05640", desc: "1st Betti number — 1D loops / tunnels" },
+    { name: "β₂ Voids (Bubbles)", value: beta2, color: beta2 === 0 ? "#888C8E" : "#D19E4A", desc: "2nd Betti number — 2D enclosed voids" },
     { name: "Density", value: `${densityPct}%`, color: densityColor, desc: "2|E| / (|V|(|V|−1))  ∈ [0, 1]" },
     { name: "Planar", value: planarLabel, color: planarColor, desc: "Boyer–Myrvold planarity test" },
   ];
@@ -457,9 +463,9 @@ function ResultView({ result, domain }: { result: MathResponse; domain: Domain }
         />
       </div>
 
-      {/* ── Spectral Stats Grid ─────────────────────────────────── */}
+      {/* ── Spectral + Betti Stats Grid ─────────────────────────── */}
       {result.topology && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
           {/* Algebraic Connectivity */}
           <div style={{ background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 18px" }}>
             <div style={{ color: "#888C8E", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
@@ -500,6 +506,36 @@ function ResultView({ result, domain }: { result: MathResponse; domain: Domain }
             </div>
             <div style={{ color: "#888C8E", fontSize: 10, lineHeight: 1.6 }}>
               <span style={{ color: "#6B8075" }}>λ₁ = 0</span> always · <span style={{ color: "#D19E4A" }}>λ₂</span> = Fiedler value
+            </div>
+          </div>
+
+          {/* Topological Signature (Betti numbers) */}
+          <div style={{ background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 18px" }}>
+            <div style={{ color: "#888C8E", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
+              Topological Signature (Betti)
+            </div>
+            {/* Tuple display: (β₀, β₁, β₂) = (n, n, n) */}
+            <div style={{ fontFamily: "'Georgia', serif", fontSize: 13, marginBottom: 10, color: "#E6E4DF", lineHeight: 1.5 }}>
+              <span style={{ color: "#888C8E" }}>(β₀, β₁, β₂) =</span>{" "}
+              <span style={{ color: "#D19E4A", fontWeight: 700, fontSize: 18 }}>
+                ({(result.topology.betti_numbers[0] ?? 0)},{" "}
+                 {(result.topology.betti_numbers[1] ?? 0)},{" "}
+                 {(result.topology.betti_numbers[2] ?? 0)})
+              </span>
+            </div>
+            {/* Per-number breakdown */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {[
+                { label: "β₀", desc: "Components",  val: result.topology.betti_numbers[0] ?? 0, color: "#6B8075" },
+                { label: "β₁", desc: "1D Holes",     val: result.topology.betti_numbers[1] ?? 0, color: result.topology.betti_numbers[1] ? "#C05640" : "#888C8E" },
+                { label: "β₂", desc: "2D Voids",     val: result.topology.betti_numbers[2] ?? 0, color: result.topology.betti_numbers[2] ? "#D19E4A" : "#888C8E" },
+              ].map(({ label, desc, val, color }) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color, fontFamily: "'Courier New', monospace", fontSize: 11, fontWeight: 700, minWidth: 20 }}>{label}</span>
+                  <span style={{ color: "#888C8E", fontSize: 10 }}>{desc}</span>
+                  <span style={{ marginLeft: "auto", background: "#2C3133", color, borderRadius: 4, padding: "1px 8px", fontFamily: "'Courier New', monospace", fontSize: 11, fontWeight: 700 }}>{val}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

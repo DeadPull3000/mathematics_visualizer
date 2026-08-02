@@ -63,6 +63,14 @@ export interface TopologyMetadata {
    * λ₂ = 0 iff the graph is disconnected.
    */
   algebraic_connectivity: number;
+  /**
+   * Betti numbers of the Simplicial Clique Complex lifted from the 1-skeleton.
+   * [β₀, β₁, β₂]
+   *   β₀ — connected components (same as metadata.num_connected_components)
+   *   β₁ — independent 1D cycles / tunnels
+   *   β₂ — enclosed 2D voids / bubbles
+   */
+  betti_numbers: number[];
 }
 
 /** Response from POST /api/process-object */
