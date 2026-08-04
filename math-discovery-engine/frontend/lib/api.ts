@@ -235,3 +235,77 @@ export async function processObject(
     body: JSON.stringify(body),
   });
 }
+
+/**
+ * Export the current graph state to a runnable Python script and trigger a
+ * browser file-download of `discovery_graph.py`.
+ *
+ * The backend returns plain text (not JSON), so this function uses a raw
+ * `fetch` call rather than the JSON-oriented `apiFetch` helper.
+ *
+ * @param request  A MathRequest describing the current graph (usually an
+ *                 edge_list built from the live `currentEdges` state).
+ *
+ * @throws {ApiError}  On network failure or a non-2xx HTTP status.
+ */
+export async function exportToPython(request: MathRequest): Promise<void> {
+  const url = `${API_BASE_URL}/api/export-python`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/plain" },
+      body: JSON.stringify(request),
+    });
+  } catch (networkError) {
+    throw new ApiError(
+      0,
+      `Network error — is the FastAPI backend running on port 8000?\n\nDetail: ${String(networkError)}`
+    );
+  }
+
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (readError) {
+    throw new ApiError(response.status, `Could not read export response: ${String(readError)}`);
+  }
+
+  if (!response.ok) {
+    // Try to extract a structured detail from FastAPI's JSON error body
+    let detail = `HTTP ${response.status} ${response.statusText}`;
+    if (text && text.trim() !== "") {
+      try {
+        const body = JSON.parse(text) as { detail?: string };
+        detail = body?.detail ?? detail;
+      } catch {
+        detail = text.substring(0, 200).replace(/\s+/g, " ").trim();
+      }
+    }
+    throw new ApiError(response.status, detail);
+  }
+
+  // The backend returns plain-text Python. If it ever wraps it in JSON,
+  // gracefully extract the "script" field.
+  let script = text;
+  if (text.trimStart().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(text) as { script?: string };
+      if (parsed.script) script = parsed.script;
+    } catch {
+      // Not JSON — use raw text as-is
+    }
+  }
+
+  // Trigger a browser download
+  const blob = new Blob([script], { type: "text/x-python" });
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = "discovery_graph.py";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(objectUrl);
+}

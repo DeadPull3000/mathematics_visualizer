@@ -246,8 +246,8 @@ def parse_formula(raw_data: str) -> nx.Graph:
                 if n <= 0 or m <= 0:
                     raise ValueError("Grid graph requires positive integers n and m.")
                 graph = nx.grid_2d_graph(n, m)
-                # Convert tuple node labels to strings to satisfy JSON/Pydantic schemas
-                nx.relabel_nodes(graph, {node: str(node) for node in graph.nodes()}, copy=False)
+                # Relabel tuple nodes to integers to work with our engine
+                graph = nx.convert_node_labels_to_integers(graph)
         elif kind == "ER" and len(args) == 2:
             n = int(args[0])
             p = float(args[1])

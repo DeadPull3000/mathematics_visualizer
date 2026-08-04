@@ -25,9 +25,12 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import { Download } from "lucide-react";
 import {
   processObject,
+  exportToPython,
   type InputType,
+  type MathRequest,
   type MathResponse,
   type TopologyMetadata,
   ApiError,
@@ -325,11 +328,15 @@ function Dropzone({
             onFocus={(e) => { e.target.style.borderColor = domain.color; }}
             onBlur={(e) => { e.target.style.borderColor = "#2C3133"; }}
           />
-          <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 10, padding: "16px 18px", color: "#888C8E", fontSize: 12, lineHeight: 2 }}>
-            <span style={{ color: domain.color, fontWeight: 600 }}>Supported graph families:</span><br />
-            <code style={{ color: "#E6E4DF" }}>K_n</code> — Complete graph on n vertices (K₅ has 10 edges)<br />
-            <code style={{ color: "#E6E4DF" }}>C_n</code> — Cycle graph on n vertices (C₆ is a hexagon)<br />
-            <code style={{ color: "#E6E4DF" }}>P_n</code> — Path graph on n vertices (P₄ has 3 edges)
+          <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 10, padding: "16px 18px", color: "#888C8E", fontSize: 11, lineHeight: 1.9 }}>
+            <span style={{ color: domain.color, fontWeight: 600, letterSpacing: "0.04em" }}>Supported graph families</span><br />
+            <code style={{ color: "#E6E4DF" }}>K_n</code>      — Complete graph &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.g. <code style={{ color: "#D19E4A" }}>K_5</code><br />
+            <code style={{ color: "#E6E4DF" }}>C_n</code>      — Cycle graph &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.g. <code style={{ color: "#D19E4A" }}>C_6</code><br />
+            <code style={{ color: "#E6E4DF" }}>P_n</code>      — Path graph &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.g. <code style={{ color: "#D19E4A" }}>P_4</code><br />
+            <code style={{ color: "#E6E4DF" }}>S_n</code>      — Star graph &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.g. <code style={{ color: "#D19E4A" }}>S_10</code><br />
+            <code style={{ color: "#E6E4DF" }}>B_n_m</code>    — Barbell graph &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.g. <code style={{ color: "#D19E4A" }}>B_5_2</code><br />
+            <code style={{ color: "#E6E4DF" }}>G_n_m</code>    — 2D Grid graph &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.g. <code style={{ color: "#D19E4A" }}>G_3_3</code><br />
+            <code style={{ color: "#E6E4DF" }}>ER_n_p</code>   — Erdős–Rényi random &nbsp;e.g. <code style={{ color: "#D19E4A" }}>ER_20_0.2</code>
           </div>
         </div>
       )}
@@ -730,6 +737,7 @@ function Microscope({
 function RightPanel({
   domain, params, setParams, isOpen, setIsOpen,
   history,
+  currentEdges,
 }: {
   domain: Domain;
   params: Record<string, number>;
@@ -737,7 +745,24 @@ function RightPanel({
   isOpen: boolean;
   setIsOpen: (v: boolean) => void;
   history: { id: string; type: "genesis" | "cut"; detail: string }[];
+  currentEdges: (string | number)[][];
 }) {
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = useCallback(async () => {
+    if (currentEdges.length === 0) return;
+    setIsExporting(true);
+    try {
+      const rawData = currentEdges.map(([u, v]) => `${u} ${v}`).join("\n");
+      const request: MathRequest = { input_type: "edge_list", raw_data: rawData };
+      await exportToPython(request);
+    } catch (err) {
+      console.error("[Export] Failed:", err);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [currentEdges]);
+
   const sliders = [
     { key: "max_filtration_radius", label: "Max Filtration Radius", min: 0.1, max: 5, step: 0.1, description: "Controls the Cech/Vietoris-Rips complex scale" },
     { key: "gnn_layers", label: "GNN Layers", min: 1, max: 10, step: 1, description: "Depth of the graph neural network" },
@@ -763,8 +788,41 @@ function RightPanel({
           {/* ── Perturbation Ledger ──────────────────────────────────────── */}
           {history.length > 0 && (
             <div>
-              <div style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
-                ⊕ Perturbation Ledger
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                  ⊕ Perturbation Ledger
+                </span>
+                <button
+                  id="export-python-btn"
+                  onClick={handleExport}
+                  disabled={isExporting || currentEdges.length === 0}
+                  title="Export current graph state to a Python script"
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5,
+                    background: "transparent",
+                    border: "1px solid #2C3133",
+                    borderRadius: 6,
+                    color: isExporting ? "#444" : "#888C8E",
+                    cursor: isExporting || currentEdges.length === 0 ? "not-allowed" : "pointer",
+                    fontSize: 9, fontWeight: 600, letterSpacing: "0.08em",
+                    padding: "4px 8px",
+                    textTransform: "uppercase",
+                    transition: "color 0.15s, border-color 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isExporting && currentEdges.length > 0) {
+                      (e.currentTarget as HTMLButtonElement).style.color = "#E6E4DF";
+                      (e.currentTarget as HTMLButtonElement).style.borderColor = "#6B8075";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.color = "#888C8E";
+                    (e.currentTarget as HTMLButtonElement).style.borderColor = "#2C3133";
+                  }}
+                >
+                  <Download size={9} strokeWidth={2.5} />
+                  {isExporting ? "Exporting…" : ".py"}
+                </button>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                 {history.map((entry, i) => {
@@ -1051,7 +1109,7 @@ export default function HomePage() {
           </main>
 
           {/* Right panel */}
-          <RightPanel domain={selectedDomain} params={params} setParams={setParams} isOpen={paramsOpen} setIsOpen={setParamsOpen} history={history} />
+          <RightPanel domain={selectedDomain} params={params} setParams={setParams} isOpen={paramsOpen} setIsOpen={setParamsOpen} history={history} currentEdges={currentEdges} />
         </div>
       </div>
     </>
