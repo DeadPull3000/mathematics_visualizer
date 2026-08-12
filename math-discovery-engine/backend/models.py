@@ -225,3 +225,14 @@ class KnotResponse(BaseModel):
     invariants: dict = Field(..., description="Knot invariants (crossing_number, p, q, type, writhe)")
     saliency_scores: dict[Union[int, str], float] = Field(..., description="Local entanglement saliency scores mapping node ID to [0.0, 1.0].")
 
+class ManifoldRequest(BaseModel):
+    """Payload for Manifold computations."""
+    shape: str = Field(..., description="Manifold shape, e.g., 'Sphere' or 'Torus'")
+    resolution: int = Field(15, description="Resolution of the parametric grid")
+
+class ManifoldResponse(BaseModel):
+    """Response containing 3D coordinates and invariants of a manifold mesh."""
+    nodes: list[dict] = Field(..., description="List of nodes with id, fx, fy, fz")
+    edges: list[list[Union[int, str]]] = Field(..., description="List of [source, target] edge pairs")
+    invariants: dict = Field(..., description="Manifold invariants (vertices, edges, euler_characteristic)")
+    harmonics: dict[Union[int, str], float] = Field(..., description="2nd non-zero eigenvector of the Combinatorial Laplacian")

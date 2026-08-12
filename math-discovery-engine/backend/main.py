@@ -24,11 +24,12 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
-from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse
+from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse
 from parsers import parse_edge_list, parse_formula, parse_json
 from topology import compute_spectral_topology, compute_betti_numbers
 from ml_engine import compute_gradient_saliency
 from knot_theory import generate_torus_knot
+from manifolds import generate_manifold
 import re
 
 # --- Logging ------------------------------------------------------------------
@@ -358,3 +359,30 @@ async def process_knot(payload: KnotRequest) -> KnotResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Knot generation error: {exc}",
         ) from exc
+
+@app.post(
+    "/api/process-manifold",
+    response_model=ManifoldResponse,
+    summary="Generate 3D manifold mesh and harmonics",
+    status_code=status.HTTP_200_OK,
+    tags=["Topology"],
+)
+async def process_manifold(payload: ManifoldRequest) -> ManifoldResponse:
+    """
+    Accepts a manifold shape and resolution to generate 3D mesh coordinates and invariants.
+    """
+    try:
+        manifold_data = generate_manifold(payload.shape, payload.resolution)
+        return ManifoldResponse(**manifold_data)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc)
+        ) from exc
+    except Exception as exc:
+        log.exception("Manifold generation failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Manifold generation error: {exc}",
+        ) from exc
+
