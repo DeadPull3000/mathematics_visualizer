@@ -138,11 +138,12 @@ function GraphVisualizerInner({
       const knotNodeObjs: FGNode[] = knotNodes.map((n) => {
         const key = String(n.id);
         const score = saliencyScores[key] ?? 0;
-        
+
+        // Saliency colour: Terracotta (high) → Ochre (mid) → Chalkboard Grey (low)
         let saliencyColor: string;
-        if (score > 0.6) saliencyColor = COLORS.partA;
-        else if (score > 0.3) saliencyColor = COLORS.neutral;
-        else saliencyColor = COLORS.low;
+        if (score > 0.6)      saliencyColor = COLORS.partA;    // #C05640 Terracotta
+        else if (score > 0.3) saliencyColor = COLORS.neutral;  // #D19E4A Ochre
+        else                  saliencyColor = "#1C1F21";       // Chalkboard Grey (low)
 
         const color = viewMode === "saliency" ? saliencyColor : COLORS.partB;
         const saliencyLabel = viewMode === "saliency" ? ` | saliency: ${score.toFixed(3)}` : "";
@@ -294,8 +295,14 @@ function GraphVisualizerInner({
         nodeId="id"
         nodeColor={(n: FGNode) => n.color}
         nodeLabel={(n: FGNode) => n.label}
-        nodeRelSize={isKnotMode ? 2 : (viewMode === "saliency" ? undefined : 5)}
-        nodeVal={(!isKnotMode && viewMode === "saliency") ? (n: FGNode) => 3 + n.saliency * 8 : undefined}
+        nodeRelSize={isKnotMode ? (viewMode === "saliency" ? undefined : 2) : (viewMode === "saliency" ? undefined : 5)}
+        nodeVal={
+          isKnotMode && viewMode === "saliency"
+            ? (n: FGNode) => 2 + n.saliency * 5          // knot: 2–7 by entanglement
+            : (!isKnotMode && viewMode === "saliency")
+            ? (n: FGNode) => 3 + n.saliency * 8          // graph: 3–11 by GCN saliency
+            : undefined
+        }
         nodeOpacity={isKnotMode ? 1 : 0.92}
         onNodeHover={(node: FGNode | null) => setHoveredNode(node)}
         // ── Links ──────────────────────────────────────────────────────────
