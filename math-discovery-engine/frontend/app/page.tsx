@@ -881,6 +881,7 @@ function ManifoldResultView({
           nodes={[]}
           edges={manifoldResult.edges.map((e) => e as (string | number)[])}
           knotNodes={manifoldResult.nodes}
+          faces={manifoldResult.faces}
           harmonics={manifoldResult.harmonics}
           viewMode={viewMode}
           height={440}
