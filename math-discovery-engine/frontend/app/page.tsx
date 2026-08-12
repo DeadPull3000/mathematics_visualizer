@@ -867,16 +867,15 @@ function ManifoldResultView({
         </div>
         {/* Legend */}
         <div style={{ display: "flex", gap: 14, marginBottom: 8, flexWrap: "wrap" }}>
-          {viewMode === "saliency" ? (
-            [{ color: "#C05640", label: "+ amplitude" }, { color: "#D19E4A", label: "≈ nodal line" }, { color: "#6B8075", label: "− amplitude" }]
-          ) : (
-            [{ color: "#6B8075", label: "Mesh vertices" }]
-          )}.map(({ color, label }) => (
+          {(viewMode === "saliency"
+            ? [{ color: "#C05640", label: "+ amplitude" }, { color: "#D19E4A", label: "≈ nodal line" }, { color: "#6B8075", label: "− amplitude" }]
+            : [{ color: "#6B8075", label: "Mesh vertices" }]
+          ).map(({ color, label }) => (
             <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
               {label}
             </span>
-          ))
+          ))}
         </div>
         <GraphVisualizer
           nodes={[]}
