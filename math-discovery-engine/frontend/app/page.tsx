@@ -1051,6 +1051,7 @@ function KnotResultView({
 function Microscope({
   result,
   knotResult,
+  manifoldResult,
   domain,
   error,
   viewMode,
