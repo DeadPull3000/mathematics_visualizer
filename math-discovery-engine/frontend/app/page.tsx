@@ -29,12 +29,15 @@ import { Download } from "lucide-react";
 import {
   processObject,
   processKnot,
+  processManifold,
   exportToPython,
   type InputType,
   type MathRequest,
   type MathResponse,
   type TopologyMetadata,
   type KnotResponse,
+  type ManifoldRequest,
+  type ManifoldResponse,
   ApiError,
 } from "@/lib/api";
 import GraphVisualizer from "@/components/GraphVisualizer";
@@ -140,7 +143,7 @@ function Sidebar({
 
       {DOMAINS.map((d) => {
         const isActive = d.id === selected.id;
-        const isLive = d.id === "combinatorics" || d.id === "knot";
+        const isLive = d.id === "combinatorics" || d.id === "knot" || d.id === "topology";
         return (
           <button
             key={d.id}
@@ -224,6 +227,65 @@ function KnotDropzone({
         <code style={{ color: "#E6E4DF" }}>T_5_3</code>  — Torus knot (5,3) &nbsp;<span style={{ color: "#D19E4A", fontFamily: "'Georgia',serif", fontSize: 12 }}>c = 8</span><br />
         <code style={{ color: "#E6E4DF" }}>T_7_2</code>  — Heptafoil knot &nbsp;&nbsp;<span style={{ color: "#D19E4A", fontFamily: "'Georgia',serif", fontSize: 12 }}>c = 7</span><br />
         <span style={{ color: "#2C3133", fontSize: 10 }}>Formula: c = min(p(q−1), q(p−1)) · Both p, q must be coprime integers ≥ 2</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ManifoldDropzone — shape picker for Topology domain
+// ---------------------------------------------------------------------------
+
+function ManifoldDropzone({
+  domain,
+  manifoldShape,
+  setManifoldShape,
+}: {
+  domain: Domain;
+  manifoldShape: "Sphere" | "Torus";
+  setManifoldShape: (s: "Sphere" | "Torus") => void;
+}) {
+  const shapes: { id: "Sphere" | "Torus"; label: string; icon: string; desc: string; euler: string }[] = [
+    { id: "Sphere", label: "Sphere",   icon: "◎", desc: "Simply-connected surface · genus 0", euler: "χ = 2" },
+    { id: "Torus",  label: "Torus",   icon: "⊙", desc: "Surface with 1 handle · genus 1",  euler: "χ = 0" },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
+        Select a manifold shape to generate a parametric mesh
+      </div>
+      <div style={{ display: "flex", gap: 12 }}>
+        {shapes.map((s) => {
+          const isActive = manifoldShape === s.id;
+          return (
+            <button
+              key={s.id}
+              id={`manifold-shape-${s.id.toLowerCase()}`}
+              onClick={() => setManifoldShape(s.id)}
+              style={{
+                flex: 1, background: isActive ? `${domain.color}12` : "#111315",
+                border: `1.5px solid ${isActive ? domain.color : "#2C3133"}`,
+                borderRadius: 12, padding: "18px 14px", cursor: "pointer",
+                textAlign: "center", transition: "all 0.15s ease",
+              }}
+            >
+              <div style={{ fontSize: 32, marginBottom: 8, color: isActive ? domain.color : "#888C8E", transition: "color 0.15s" }}>{s.icon}</div>
+              <div style={{ color: isActive ? "#E6E4DF" : "#888C8E", fontWeight: isActive ? 700 : 400, fontSize: 14, marginBottom: 4, transition: "color 0.15s" }}>{s.label}</div>
+              <div style={{ color: "#888C8E", fontSize: 10, lineHeight: 1.5 }}>{s.desc}</div>
+              <div style={{ marginTop: 8, display: "inline-block", background: isActive ? `${domain.color}20` : "#2C3133", border: `1px solid ${isActive ? domain.color : "#2C3133"}`, color: isActive ? domain.color : "#888C8E", borderRadius: 5, padding: "2px 10px", fontFamily: "'Courier New', monospace", fontSize: 11, fontWeight: 700, transition: "all 0.15s" }}>
+                {s.euler}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 18px", color: "#888C8E", fontSize: 11, lineHeight: 1.9 }}>
+        <span style={{ color: domain.color, fontWeight: 600, letterSpacing: "0.04em" }}>Laplacian Harmonics — Spectral Geometry</span><br />
+        The mesh Laplacian eigenvector partitions the surface into{" "}
+        <span style={{ color: "#E6E4DF" }}>vibration modes</span>.<br />
+        <span style={{ color: "#C05640" }}>Terracotta</span> = positive amplitude &nbsp;·&nbsp;
+        <span style={{ color: "#6B8075" }}>Sage</span> = negative amplitude &nbsp;·&nbsp;
+        <span style={{ color: "#D19E4A" }}>Ochre</span> = nodal line (≈ 0)
       </div>
     </div>
   );
@@ -706,6 +768,130 @@ function ResultView({
 }
 
 // ---------------------------------------------------------------------------
+// ManifoldResultView — invariants + 3D mesh for Topology domain
+// ---------------------------------------------------------------------------
+
+function ManifoldResultView({
+  manifoldResult,
+  domain,
+  viewMode,
+  setViewMode,
+}: {
+  manifoldResult: ManifoldResponse;
+  domain: Domain;
+  viewMode: "spectral" | "saliency";
+  setViewMode: (m: "spectral" | "saliency") => void;
+}) {
+  const inv = manifoldResult.invariants;
+  const rows = [
+    { name: "Vertices V",          value: inv.vertices,           color: "#D19E4A",   desc: "Mesh vertex count" },
+    { name: "Edges E",             value: inv.edges,              color: "#C05640",   desc: "Mesh edge count" },
+    { name: "Euler Characteristic", value: inv.euler_characteristic, color: inv.euler_characteristic === 2 ? "#6B8075" : "#D19E4A", desc: "χ = V − E + F  (Sphere: 2, Torus: 0)" },
+  ];
+  return (
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Summary cards */}
+      <div style={{ display: "flex", gap: 12 }}>
+        {[
+          { label: "V",  value: inv.vertices,             color: "#D19E4A" },
+          { label: "E",  value: inv.edges,                color: "#C05640" },
+          { label: "χ",  value: inv.euler_characteristic, color: inv.euler_characteristic === 2 ? "#6B8075" : "#D19E4A" },
+        ].map((s) => (
+          <div key={s.label} style={{ flex: 1, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
+            <div style={{ color: s.color, fontSize: 26, fontWeight: 700, fontFamily: "'Georgia', serif", lineHeight: 1, marginBottom: 6 }}>{s.value}</div>
+            <div style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Invariants table */}
+      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#1C1F21", overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid #2C3133" }}>
+              {["Invariant", "Value", "Mathematical Meaning"].map((h) => (
+                <th key={h} style={{ padding: "10px 14px", color: "#888C8E", fontWeight: 600, fontSize: 10, letterSpacing: "0.08em", textAlign: "left", textTransform: "uppercase" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={row.name}
+                style={{ borderBottom: i < rows.length - 1 ? "1px solid #2C3133" : "none", transition: "background 0.1s" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#22262850"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
+              >
+                <td style={{ padding: "11px 14px", color: "#E6E4DF", fontWeight: 500, whiteSpace: "nowrap" }}>{row.name}</td>
+                <td style={{ padding: "11px 14px" }}>
+                  <span style={{ background: "#2C3133", color: row.color, borderRadius: 5, padding: "3px 10px", fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    {String(row.value)}
+                  </span>
+                </td>
+                <td style={{ padding: "11px 14px", color: "#888C8E", fontSize: 11, lineHeight: 1.5 }}>{row.desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 3D Manifold Visualizer */}
+      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Manifold Mesh · Laplacian Harmonics (WebGL)
+          </div>
+          {/* View mode toggle */}
+          <div style={{ display: "flex", background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 8, padding: 3, gap: 2 }}>
+            {(["spectral", "saliency"] as const).map((mode) => {
+              const isActive = viewMode === mode;
+              const labels: Record<string, string> = {
+                spectral: "⟡ Base Geometry",
+                saliency: "◈ Spectral Harmonics",
+              };
+              return (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  style={{
+                    background: isActive ? (mode === "saliency" ? "#C05640" : "#6B8075") : "transparent",
+                    border: "none", borderRadius: 6,
+                    color: isActive ? "#E6E4DF" : "#888C8E",
+                    cursor: "pointer", fontSize: 10, fontWeight: isActive ? 700 : 400,
+                    letterSpacing: "0.04em", padding: "5px 12px",
+                    transition: "all 0.2s ease", whiteSpace: "nowrap",
+                  }}
+                >{labels[mode]}</button>
+              );
+            })}
+          </div>
+        </div>
+        {/* Legend */}
+        <div style={{ display: "flex", gap: 14, marginBottom: 8, flexWrap: "wrap" }}>
+          {viewMode === "saliency" ? (
+            [{ color: "#C05640", label: "+ amplitude" }, { color: "#D19E4A", label: "≈ nodal line" }, { color: "#6B8075", label: "− amplitude" }]
+          ) : (
+            [{ color: "#6B8075", label: "Mesh vertices" }]
+          )}.map(({ color, label }) => (
+            <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
+              {label}
+            </span>
+          ))
+        </div>
+        <GraphVisualizer
+          nodes={[]}
+          edges={manifoldResult.edges.map((e) => e as (string | number)[])}
+          knotNodes={manifoldResult.nodes}
+          harmonics={manifoldResult.harmonics}
+          viewMode={viewMode}
+          height={440}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Microscope wrapper
 // ---------------------------------------------------------------------------
 
@@ -876,6 +1062,7 @@ function Microscope({
 }: {
   result: MathResponse | null;
   knotResult: KnotResponse | null;
+  manifoldResult: ManifoldResponse | null;
   domain: Domain;
   error: string | null;
   viewMode: "spectral" | "saliency";
@@ -885,6 +1072,7 @@ function Microscope({
   deletedEdges?: (string | number)[][];
 }) {
   const isKnotDomain = domain.id === "knot";
+  const isTopooDomain = domain.id === "topology";
   return (
     <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 400 }}>
       <div style={{ padding: "12px 18px", borderBottom: "1px solid #2C3133", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
@@ -892,7 +1080,7 @@ function Microscope({
           <span style={{ color: domain.color, fontSize: 14 }}>◉</span>
           <span style={{ color: "#E6E4DF", fontSize: 12, fontWeight: 600, letterSpacing: "0.06em" }}>STRUCTURE MICROSCOPE</span>
         </div>
-        {result && !isKnotDomain && (
+        {result && !isKnotDomain && !isTopooDomain && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ background: "#6B807520", border: "1px solid #6B8075", color: "#6B8075", borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
               {result.metadata.num_nodes}V · {result.metadata.num_edges}E
@@ -900,20 +1088,8 @@ function Microscope({
             {perturbationCount !== undefined && perturbationCount > 0 && (
               <span
                 title={`${perturbationCount} edge${perturbationCount === 1 ? "" : "s"} removed by interactive perturbation`}
-                style={{
-                  background: "#C0564020",
-                  border: "1px solid #C05640",
-                  color: "#C05640",
-                  borderRadius: 6,
-                  padding: "2px 10px",
-                  fontSize: 10,
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  animation: "pulse 1.8s ease-in-out 1",
-                }}
-              >
-                −{perturbationCount}E perturbed
-              </span>
+                style={{ background: "#C0564020", border: "1px solid #C05640", color: "#C05640", borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", animation: "pulse 1.8s ease-in-out 1" }}
+              >−{perturbationCount}E perturbed</span>
             )}
           </div>
         )}
@@ -922,16 +1098,25 @@ function Microscope({
             Torus Knot · {knotResult.nodes.length} pts
           </span>
         )}
+        {manifoldResult && isTopooDomain && (
+          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
+            {manifoldResult.nodes.length}V · χ = {manifoldResult.invariants.euler_characteristic}
+          </span>
+        )}
       </div>
-      <div style={{ flex: 1, display: "flex", alignItems: error || (!result && !knotResult) ? "center" : "flex-start", justifyContent: error || (!result && !knotResult) ? "center" : "flex-start", padding: 24, overflowY: "auto" }}>
+      <div style={{ flex: 1, display: "flex", alignItems: error || (!result && !knotResult && !manifoldResult) ? "center" : "flex-start", justifyContent: error || (!result && !knotResult && !manifoldResult) ? "center" : "flex-start", padding: 24, overflowY: "auto" }}>
         {error ? (
           <div style={{ textAlign: "center", maxWidth: 420 }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚠</div>
             <div style={{ color: "#C05640", fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Parse / Computation Error</div>
-            <div style={{ color: "#888C8E", fontSize: 12, lineHeight: 1.7, background: "#1C1F21", border: "1px solid #C0564030", borderRadius: 8, padding: "12px 16px", fontFamily: "'Courier New', monospace", textAlign: "left" }}>
-              {error}
-            </div>
+            <div style={{ color: "#888C8E", fontSize: 12, lineHeight: 1.7, background: "#1C1F21", border: "1px solid #C0564030", borderRadius: 8, padding: "12px 16px", fontFamily: "'Courier New', monospace", textAlign: "left" }}>{error}</div>
           </div>
+        ) : isTopooDomain ? (
+          manifoldResult ? (
+            <ManifoldResultView manifoldResult={manifoldResult} domain={domain} viewMode={viewMode} setViewMode={setViewMode} />
+          ) : (
+            <EmptyMicroscope domain={domain} />
+          )
         ) : isKnotDomain ? (
           knotResult ? (
             <KnotResultView knotResult={knotResult} domain={domain} viewMode={viewMode} setViewMode={setViewMode} />
@@ -1117,11 +1302,13 @@ export default function HomePage() {
   const [pastedText, setPastedText] = useState("");
   const [formulaText, setFormulaText] = useState("K_5");
   const [knotFormula, setKnotFormula] = useState("T_3_2");
+  const [manifoldShape, setManifoldShape] = useState<"Sphere" | "Torus">("Sphere");
   const [fileContent, setFileContent] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<MathResponse | null>(null);
   const [knotResult, setKnotResult] = useState<KnotResponse | null>(null);
+  const [manifoldResult, setManifoldResult] = useState<ManifoldResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paramsOpen, setParamsOpen] = useState(false);
   const [params, setParams] = useState<Record<string, number>>({
@@ -1138,12 +1325,14 @@ export default function HomePage() {
   const [history, setHistory] = useState<{ id: string; type: "genesis" | "cut"; detail: string }[]>([]);
 
   const isKnotDomain = selectedDomain.id === "knot";
+  const isTopologyDomain = selectedDomain.id === "topology";
 
   // Clear results when switching domain
   const handleDomainSelect = useCallback((d: Domain) => {
     setSelectedDomain(d);
     setResult(null);
     setKnotResult(null);
+    setManifoldResult(null);
     setError(null);
     setHistory([]);
     setDeletedEdges([]);
@@ -1151,7 +1340,7 @@ export default function HomePage() {
     setPerturbationCount(0);
   }, []);
 
-  useEffect(() => { setResult(null); setKnotResult(null); setError(null); }, [selectedDomain]);
+  useEffect(() => { setResult(null); setKnotResult(null); setManifoldResult(null); setError(null); }, [selectedDomain]);
 
   const handleFileLoad = useCallback((raw: string) => {
     setFileContent(raw);
@@ -1159,7 +1348,23 @@ export default function HomePage() {
   }, []);
 
   const handleDiscover = useCallback(async () => {
-    setIsLoading(true); setError(null); setResult(null); setKnotResult(null);
+    setIsLoading(true); setError(null); setResult(null); setKnotResult(null); setManifoldResult(null);
+
+    // ── Topology domain (Surfaces & Manifolds) ────────────────────────────────
+    if (isTopologyDomain) {
+      try {
+        const req: ManifoldRequest = { shape: manifoldShape, resolution: 15 };
+        const response = await processManifold(req);
+        setManifoldResult(response);
+      } catch (err) {
+        let msg: string;
+        if (err instanceof ApiError) msg = err.detail;
+        else if (err instanceof Error) msg = err.message;
+        else msg = String(err);
+        setError(msg);
+      } finally { setIsLoading(false); }
+      return;
+    }
 
     // ── Knot Theory domain ─────────────────────────────────────────────────
     if (isKnotDomain) {
@@ -1215,7 +1420,7 @@ export default function HomePage() {
       }
       setError(msg);
     } finally { setIsLoading(false); }
-  }, [isKnotDomain, knotFormula, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
+  }, [isTopologyDomain, manifoldShape, isKnotDomain, knotFormula, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
 
   /**
    * handleEdgeRemove — called by GraphVisualizer when the user clicks an edge.
@@ -1318,13 +1523,19 @@ export default function HomePage() {
             <section style={{ flexShrink: 0, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: 280 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                  {isKnotDomain ? "∞ Knot Formula" : "⬆ Input / Data Source"}
+                  {isTopologyDomain ? "◎ Manifold Shape" : isKnotDomain ? "∞ Knot Formula" : "⬆ Input / Data Source"}
                 </span>
                 <span style={{ color: "#888C8E", fontSize: 10 }}>
-                  {isKnotDomain ? "Torus knot parametric engine" : "All parsing is performed server-side"}
+                  {isTopologyDomain ? "Parametric mesh · Laplacian harmonics" : isKnotDomain ? "Torus knot parametric engine" : "All parsing is performed server-side"}
                 </span>
               </div>
-              {isKnotDomain ? (
+              {isTopologyDomain ? (
+                <ManifoldDropzone
+                  domain={selectedDomain}
+                  manifoldShape={manifoldShape}
+                  setManifoldShape={setManifoldShape}
+                />
+              ) : isKnotDomain ? (
                 <KnotDropzone
                   domain={selectedDomain}
                   knotFormula={knotFormula}
@@ -1361,15 +1572,15 @@ export default function HomePage() {
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
             >
               {isLoading ? (
-                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isKnotDomain ? "Generating Knot…" : "Computing Invariants…"}</>
+                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isTopologyDomain ? "Generating Mesh…" : isKnotDomain ? "Generating Knot…" : "Computing Invariants…"}</>
               ) : (
-                <><span>{isKnotDomain ? "∞" : "⚗"}</span> {isKnotDomain ? "Generate Knot" : "Discover Structure"}</>
+                <><span>{isTopologyDomain ? "◎" : isKnotDomain ? "∞" : "⚗"}</span> {isTopologyDomain ? "Generate Manifold" : isKnotDomain ? "Generate Knot" : "Discover Structure"}</>
               )}
             </button>
 
             {/* Structure Microscope */}
             <section style={{ flexShrink: 0, minHeight: 400 }}>
-              <Microscope result={result} knotResult={knotResult} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain ? undefined : handleEdgeRemove} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
+              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain ? undefined : handleEdgeRemove} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
             </section>
           </main>
 

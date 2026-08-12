@@ -64,6 +64,12 @@ export interface GraphVisualizerProps {
   fiedlerVector?: Record<string, number>;
   /** GCN gradient saliency scores — maps stringified node ID → [0,1]. */
   saliencyScores?: Record<string, number>;
+  /**
+   * Laplacian harmonic amplitudes — maps stringified node ID → signed float.
+   * When present, the visualiser colours manifold mesh nodes by eigenmode
+   * amplitude: Terracotta (+) · Ochre (≈0) · Sage (−).
+   */
+  harmonics?: Record<string, number>;
   /** Current visualisation mode. Defaults to "spectral". */
   viewMode?: ViewMode;
   /** Canvas height in pixels. Defaults to 400. */
@@ -114,6 +120,7 @@ function GraphVisualizerInner({
   deletedEdges = [],
   fiedlerVector = {},
   saliencyScores = {},
+  harmonics,
   viewMode = "spectral",
   height = 400,
   onEdgeRemove,
@@ -139,19 +146,34 @@ function GraphVisualizerInner({
         const key = String(n.id);
         const score = saliencyScores[key] ?? 0;
 
-        // Saliency colour: Terracotta (high) → Ochre (mid) → Chalkboard Grey (low)
-        let saliencyColor: string;
-        if (score > 0.6)      saliencyColor = COLORS.partA;    // #C05640 Terracotta
-        else if (score > 0.3) saliencyColor = COLORS.neutral;  // #D19E4A Ochre
-        else                  saliencyColor = "#1C1F21";       // Chalkboard Grey (low)
-
-        const color = viewMode === "saliency" ? saliencyColor : COLORS.partB;
-        const saliencyLabel = viewMode === "saliency" ? ` | saliency: ${score.toFixed(3)}` : "";
+        // --- Manifold / knot harmonic colouring ---
+        // Priority: if harmonics dict is present (manifold mode), colour by
+        // eigenmode amplitude.  Otherwise fall back to knot entanglement saliency.
+        let color: string;
+        let label: string;
+        if (harmonics && viewMode === "saliency") {
+          // Harmonic amplitude: Terracotta (+) → Ochre (nodal) → Sage (−)
+          const amp = harmonics[key] ?? 0;
+          if (amp > 0.05)       color = COLORS.partA;   // #C05640 Terracotta
+          else if (amp < -0.05) color = COLORS.partB;   // #6B8075 Sage
+          else                  color = COLORS.neutral; // #D19E4A Ochre (nodal line)
+          label = `Point ${key} | λ-amp: ${amp.toFixed(3)}`;
+        } else if (viewMode === "saliency") {
+          // Knot entanglement saliency colouring
+          if (score > 0.6)      color = COLORS.partA;
+          else if (score > 0.3) color = COLORS.neutral;
+          else                  color = "#1C1F21";
+          label = `Point ${key} | saliency: ${score.toFixed(3)}`;
+        } else {
+          // Base geometry — calm uniform Sage
+          color = COLORS.partB;
+          label = `Point ${key}`;
+        }
 
         return {
           id: key,
           color,
-          label: `Point ${key}${saliencyLabel}`,
+          label,
           saliency: score,
           fx: n.fx,
           fy: n.fy,
@@ -295,9 +317,9 @@ function GraphVisualizerInner({
         nodeId="id"
         nodeColor={(n: FGNode) => n.color}
         nodeLabel={(n: FGNode) => n.label}
-        nodeRelSize={isKnotMode ? (viewMode === "saliency" ? undefined : 2) : (viewMode === "saliency" ? undefined : 5)}
+        nodeRelSize={isKnotMode ? (viewMode === "saliency" && !harmonics ? undefined : 3) : (viewMode === "saliency" ? undefined : 5)}
         nodeVal={
-          isKnotMode && viewMode === "saliency"
+          isKnotMode && viewMode === "saliency" && !harmonics
             ? (n: FGNode) => 2 + n.saliency * 5          // knot: 2–7 by entanglement
             : (!isKnotMode && viewMode === "saliency")
             ? (n: FGNode) => 3 + n.saliency * 8          // graph: 3–11 by GCN saliency
@@ -305,9 +327,11 @@ function GraphVisualizerInner({
         }
         nodeOpacity={isKnotMode ? 1 : 0.92}
         onNodeHover={(node: FGNode | null) => setHoveredNode(node)}
-        // ── Links ──────────────────────────────────────────────────────────
-        linkColor={isKnotMode ? () => COLORS.partA : getLinkColor}
-        linkWidth={isKnotMode ? 3 : ((link: FGLink) => (link.isDeleted ? 0.5 : 1.5))}
+        // ── Links ──────────────────────────────────────────────────────────────
+        linkColor={isKnotMode
+          ? (harmonics ? () => "rgba(44, 49, 51, 0.6)" : () => COLORS.partA)  // manifold wireframe vs knot strand
+          : getLinkColor}
+        linkWidth={isKnotMode ? (harmonics ? 1 : 3) : ((link: FGLink) => (link.isDeleted ? 0.5 : 1.5))}
         linkOpacity={isKnotMode ? 1 : 0.8}
         linkDashLen={isKnotMode ? undefined : ((link: FGLink) => (link.isDeleted ? 4 : undefined))}
         linkDashGap={isKnotMode ? undefined : ((link: FGLink) => (link.isDeleted ? 3 : undefined))}
