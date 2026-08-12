@@ -137,6 +137,40 @@ export interface KnotResponse {
   saliency_scores?: Record<string, number>;
 }
 
+// --- Topology (Surfaces & Manifolds) types -----------------------------------
+
+/** Request body for POST /api/process-manifold */
+export interface ManifoldRequest {
+  /** Manifold shape identifier, e.g. "Sphere" or "Torus". */
+  shape: "Sphere" | "Torus";
+  /** Resolution of the parametric grid (number of divisions per axis). */
+  resolution?: number;
+}
+
+/** Topological invariants of the discretised manifold mesh. */
+export interface ManifoldInvariants {
+  vertices: number;
+  edges: number;
+  /** χ = V − E + F. Sphere = 2, Torus = 0. */
+  euler_characteristic: number;
+}
+
+/** Response from POST /api/process-manifold */
+export interface ManifoldResponse {
+  /** Fixed-position nodes: id + fx/fy/fz world-space coordinates (scaled × 50). */
+  nodes: KnotNode[];
+  /** Edge list as [source, target] integer pairs. */
+  edges: [number, number][];
+  /** Euler characteristic and mesh counts. */
+  invariants: ManifoldInvariants;
+  /**
+   * Laplacian eigenmode amplitudes — 2nd non-zero eigenvector of the
+   * Combinatorial Laplacian (analogous to Spherical Harmonics on the sphere).
+   * Maps node ID (string key) to a signed float.
+   */
+  harmonics: Record<string, number>;
+}
+
 // --- Typed error class -------------------------------------------------------
 
 export class ApiError extends Error {
@@ -358,6 +392,22 @@ export async function exportToPython(request: MathRequest): Promise<void> {
  */
 export async function processKnot(request: KnotRequest): Promise<KnotResponse> {
   return apiFetch<KnotResponse>("/api/process-knot", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+/**
+ * Send a manifold shape request to the backend and receive a 3D mesh with
+ * Laplacian harmonics (spectral geometry).
+ *
+ * @param request  ManifoldRequest — shape ("Sphere" | "Torus") + optional resolution.
+ *
+ * @example
+ * const mesh = await processManifold({ shape: "Torus", resolution: 15 });
+ */
+export async function processManifold(request: ManifoldRequest): Promise<ManifoldResponse> {
+  return apiFetch<ManifoldResponse>("/api/process-manifold", {
     method: "POST",
     body: JSON.stringify(request),
   });
