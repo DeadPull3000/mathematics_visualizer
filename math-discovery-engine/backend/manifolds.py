@@ -48,7 +48,7 @@ def compute_cotangent_laplacian(nodes: list[dict], faces: list[list[int]]) -> np
     return L
 
 
-def generate_manifold(shape: str, res: int = 15) -> dict:
+def generate_manifold(shape: str, res: int = 15, deformation: str = "none") -> dict:
     """
     Generate parametric meshes for Topology domain.
     Outputs nodes, faces, edges, invariants, and cotangent laplacian harmonics.
@@ -63,9 +63,18 @@ def generate_manifold(shape: str, res: int = 15) -> dict:
         for i in range(res):
             for j in range(res):
                 node_id = i * res + j
-                x = np.sin(theta[i]) * np.cos(phi[j]) * 50
-                y = np.sin(theta[i]) * np.sin(phi[j]) * 50
-                z = np.cos(theta[i]) * 50
+                x = np.sin(theta[i]) * np.cos(phi[j])
+                y = np.sin(theta[i]) * np.sin(phi[j])
+                z = np.cos(theta[i])
+                
+                if deformation == "stretch":
+                    z *= 2.0
+                elif deformation == "ripple":
+                    z += 0.3 * np.sin(5 * x) * np.cos(5 * y)
+                    
+                x *= 50
+                y *= 50
+                z *= 50
                 
                 nodes.append({
                     "id": node_id,
@@ -95,9 +104,18 @@ def generate_manifold(shape: str, res: int = 15) -> dict:
         for i in range(res):
             for j in range(res):
                 node_id = i * res + j
-                x = (c + a * np.cos(v[j])) * np.cos(u[i]) * 50
-                y = (c + a * np.cos(v[j])) * np.sin(u[i]) * 50
-                z = a * np.sin(v[j]) * 50
+                x = (c + a * np.cos(v[j])) * np.cos(u[i])
+                y = (c + a * np.cos(v[j])) * np.sin(u[i])
+                z = a * np.sin(v[j])
+                
+                if deformation == "stretch":
+                    z *= 2.0
+                elif deformation == "ripple":
+                    z += 0.3 * np.sin(5 * x) * np.cos(5 * y)
+                    
+                x *= 50
+                y *= 50
+                z *= 50
                 
                 nodes.append({
                     "id": node_id,

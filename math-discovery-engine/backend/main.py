@@ -372,7 +372,11 @@ async def process_manifold(payload: ManifoldRequest) -> ManifoldResponse:
     Accepts a manifold shape and resolution to generate 3D mesh coordinates and invariants.
     """
     try:
-        manifold_data = generate_manifold(payload.shape, payload.resolution)
+        manifold_data = generate_manifold(
+            shape=payload.shape,
+            res=payload.resolution,
+            deformation=payload.deformation,
+        )
         return ManifoldResponse(**manifold_data)
     except ValueError as exc:
         raise HTTPException(

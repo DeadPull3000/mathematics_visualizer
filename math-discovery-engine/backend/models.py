@@ -229,6 +229,7 @@ class ManifoldRequest(BaseModel):
     """Payload for Manifold computations."""
     shape: str = Field(..., description="Manifold shape, e.g., 'Sphere' or 'Torus'")
     resolution: int = Field(15, description="Resolution of the parametric grid")
+    deformation: str = Field("none", description="Deformation type: 'none', 'stretch', or 'ripple'")
 
 class ManifoldResponse(BaseModel):
     """Response containing 3D coordinates and invariants of a manifold mesh."""
