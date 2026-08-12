@@ -240,14 +240,23 @@ function ManifoldDropzone({
   domain,
   manifoldShape,
   setManifoldShape,
+  deformation,
+  setDeformation,
 }: {
   domain: Domain;
   manifoldShape: "Sphere" | "Torus";
   setManifoldShape: (s: "Sphere" | "Torus") => void;
+  deformation: "none" | "stretch" | "ripple";
+  setDeformation: (d: "none" | "stretch" | "ripple") => void;
 }) {
   const shapes: { id: "Sphere" | "Torus"; label: string; icon: string; desc: string; euler: string }[] = [
     { id: "Sphere", label: "Sphere",   icon: "◎", desc: "Simply-connected surface · genus 0", euler: "χ = 2" },
     { id: "Torus",  label: "Torus",   icon: "⊙", desc: "Surface with 1 handle · genus 1",  euler: "χ = 0" },
+  ];
+  const deformations: { id: "none" | "stretch" | "ripple"; label: string; symbol: string }[] = [
+    { id: "none",    label: "Perfect (None)",        symbol: "∅" },
+    { id: "stretch", label: "Ellipsoid (Stretch)",   symbol: "↕" },
+    { id: "ripple",  label: "Interference (Ripple)", symbol: "∿" },
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -279,6 +288,42 @@ function ManifoldDropzone({
           );
         })}
       </div>
+
+      {/* ── Deformation selector ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          Geometric Deformation
+        </div>
+        <div style={{ display: "flex", gap: 0, border: "1px solid #2C3133", borderRadius: 8, overflow: "hidden" }}>
+          {deformations.map((d, i) => {
+            const isActive = deformation === d.id;
+            return (
+              <button
+                key={d.id}
+                id={`manifold-deformation-${d.id}`}
+                onClick={() => setDeformation(d.id)}
+                style={{
+                  flex: 1,
+                  background: isActive ? `${domain.color}18` : "transparent",
+                  border: "none",
+                  borderLeft: i > 0 ? "1px solid #2C3133" : "none",
+                  padding: "9px 6px",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 3,
+                  transition: "background 0.15s",
+                }}
+              >
+                <span style={{ fontSize: 14, color: isActive ? domain.color : "#555A5D", transition: "color 0.15s" }}>{d.symbol}</span>
+                <span style={{ fontSize: 9, letterSpacing: "0.04em", color: isActive ? "#E6E4DF" : "#555A5D", transition: "color 0.15s", whiteSpace: "nowrap" }}>{d.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 18px", color: "#888C8E", fontSize: 11, lineHeight: 1.9 }}>
         <span style={{ color: domain.color, fontWeight: 600, letterSpacing: "0.04em" }}>Laplacian Harmonics — Spectral Geometry</span><br />
         The mesh Laplacian eigenvector partitions the surface into{" "}
@@ -1304,6 +1349,7 @@ export default function HomePage() {
   const [formulaText, setFormulaText] = useState("K_5");
   const [knotFormula, setKnotFormula] = useState("T_3_2");
   const [manifoldShape, setManifoldShape] = useState<"Sphere" | "Torus">("Sphere");
+  const [deformation, setDeformation] = useState<"none" | "stretch" | "ripple">("none");
   const [fileContent, setFileContent] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -1354,7 +1400,7 @@ export default function HomePage() {
     // ── Topology domain (Surfaces & Manifolds) ────────────────────────────────
     if (isTopologyDomain) {
       try {
-        const req: ManifoldRequest = { shape: manifoldShape, resolution: 15 };
+        const req: ManifoldRequest = { shape: manifoldShape, resolution: 15, deformation };
         const response = await processManifold(req);
         setManifoldResult(response);
       } catch (err) {
@@ -1421,7 +1467,7 @@ export default function HomePage() {
       }
       setError(msg);
     } finally { setIsLoading(false); }
-  }, [isTopologyDomain, manifoldShape, isKnotDomain, knotFormula, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
+  }, [isTopologyDomain, manifoldShape, deformation, isKnotDomain, knotFormula, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
 
   /**
    * handleEdgeRemove — called by GraphVisualizer when the user clicks an edge.
@@ -1535,6 +1581,8 @@ export default function HomePage() {
                   domain={selectedDomain}
                   manifoldShape={manifoldShape}
                   setManifoldShape={setManifoldShape}
+                  deformation={deformation}
+                  setDeformation={setDeformation}
                 />
               ) : isKnotDomain ? (
                 <KnotDropzone
