@@ -161,11 +161,16 @@ export interface ManifoldResponse {
   nodes: KnotNode[];
   /** Edge list as [source, target] integer pairs. */
   edges: [number, number][];
+  /**
+   * Triangular face list — each entry is [node_i, node_j, node_k].
+   * Derived by triangulating the parametric quad grid with two triangles per quad.
+   */
+  faces?: [number, number, number][];
   /** Euler characteristic and mesh counts. */
   invariants: ManifoldInvariants;
   /**
    * Laplacian eigenmode amplitudes — 2nd non-zero eigenvector of the
-   * Combinatorial Laplacian (analogous to Spherical Harmonics on the sphere).
+   * Cotangent Laplacian (encodes true 3D geometry, not just combinatorics).
    * Maps node ID (string key) to a signed float.
    */
   harmonics: Record<string, number>;
