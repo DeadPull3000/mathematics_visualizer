@@ -124,7 +124,8 @@ export interface KnotInvariants {
   p: number;
   q: number;
   type: string;
-  writhe: number;
+  /** Discrete Gauss Linking Integral — chiral self-entanglement. */
+  writhe?: number;
 }
 
 /** Response from POST /api/process-knot */
@@ -132,7 +133,8 @@ export interface KnotResponse {
   nodes: KnotNode[];
   edges: [number, number][];
   invariants: KnotInvariants;
-  saliency_scores: Record<string, number>;
+  /** Local entanglement saliency from the Gauss Linking Integral — node ID → [0, 1]. */
+  saliency_scores?: Record<string, number>;
 }
 
 // --- Typed error class -------------------------------------------------------
