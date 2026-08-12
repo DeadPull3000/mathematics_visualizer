@@ -135,15 +135,28 @@ function GraphVisualizerInner({
   const graphData = useMemo<{ nodes: FGNode[]; links: FGLink[] }>(() => {
     // ── Knot mode: use the pre-computed fixed coordinates ───────────────────
     if (isKnotMode && knotNodes) {
-      const knotNodeObjs: FGNode[] = knotNodes.map((n) => ({
-        id: String(n.id),
-        color: COLORS.partB,   // Sage — calm, mathematical
-        label: `Point ${n.id}`,
-        saliency: 0,
-        fx: n.fx,
-        fy: n.fy,
-        fz: n.fz,
-      }));
+      const knotNodeObjs: FGNode[] = knotNodes.map((n) => {
+        const key = String(n.id);
+        const score = saliencyScores[key] ?? 0;
+        
+        let saliencyColor: string;
+        if (score > 0.6) saliencyColor = COLORS.partA;
+        else if (score > 0.3) saliencyColor = COLORS.neutral;
+        else saliencyColor = COLORS.low;
+
+        const color = viewMode === "saliency" ? saliencyColor : COLORS.partB;
+        const saliencyLabel = viewMode === "saliency" ? ` | saliency: ${score.toFixed(3)}` : "";
+
+        return {
+          id: key,
+          color,
+          label: `Point ${key}${saliencyLabel}`,
+          saliency: score,
+          fx: n.fx,
+          fy: n.fy,
+          fz: n.fz,
+        };
+      });
       const knotLinks: FGLink[] = edges.map(([src, tgt]) => ({
         source: String(src),
         target: String(tgt),

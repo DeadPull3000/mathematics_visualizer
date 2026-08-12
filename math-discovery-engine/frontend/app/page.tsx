@@ -712,9 +712,13 @@ function ResultView({
 function KnotResultView({
   knotResult,
   domain,
+  viewMode,
+  setViewMode,
 }: {
   knotResult: KnotResponse;
   domain: Domain;
+  viewMode: "spectral" | "saliency";
+  setViewMode: (m: "spectral" | "saliency") => void;
 }) {
   const inv = knotResult.invariants;
   const rows = [
@@ -722,6 +726,7 @@ function KnotResultView({
     { name: "Parameters (p,q)",value: `(${inv.p}, ${inv.q})`, color: "#D19E4A",  desc: "Torus knot winding numbers" },
     { name: "Crossing Number", value: inv.crossing_number,  color: "#C05640",    desc: "Minimum crossings over all diagrams" },
     { name: "Strand Count",    value: knotResult.nodes.length, color: "#6B8075", desc: "Parametric sample points" },
+    { name: "Writhe (Gauss)",  value: inv.writhe.toFixed(4), color: "#D19E4A",  desc: "Discrete Gauss linking integral" },
   ];
 
   return (
@@ -732,6 +737,7 @@ function KnotResultView({
           { label: "p",           value: inv.p,              color: "#D19E4A" },
           { label: "q",           value: inv.q,              color: "#6B8075" },
           { label: "Crossings c", value: inv.crossing_number, color: "#C05640" },
+          { label: "Writhe",      value: inv.writhe.toFixed(2), color: "#D19E4A" },
         ].map((s) => (
           <div key={s.label} style={{ flex: 1, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
             <div style={{ color: s.color, fontSize: 26, fontWeight: 700, fontFamily: "'Georgia', serif", lineHeight: 1, marginBottom: 6 }}>{s.value}</div>
@@ -776,24 +782,80 @@ function KnotResultView({
           <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             Torus Knot · 3D Parametric Curve (WebGL)
           </div>
-          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
-            T({inv.p},{inv.q}) · c = {inv.crossing_number}
-          </span>
+          {/* View Mode Toggle */}
+          <div
+            style={{
+              display: "flex",
+              background: "#1C1F21",
+              border: "1px solid #2C3133",
+              borderRadius: 8,
+              padding: 3,
+              gap: 2,
+            }}
+          >
+            {(["spectral", "saliency"] as const).map((mode) => {
+              const isActive = viewMode === mode;
+              const labels: Record<string, string> = {
+                spectral: "⟡ Parametric Base",
+                saliency: "◈ Gradient Saliency",
+              };
+              return (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  style={{
+                    background: isActive
+                      ? mode === "saliency" ? "#C05640" : "#6B8075"
+                      : "transparent",
+                    border: "none",
+                    borderRadius: 6,
+                    color: isActive ? "#E6E4DF" : "#888C8E",
+                    cursor: "pointer",
+                    fontSize: 10,
+                    fontWeight: isActive ? 700 : 400,
+                    letterSpacing: "0.04em",
+                    padding: "5px 12px",
+                    transition: "all 0.2s ease",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {labels[mode]}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
             <span style={{ width: 18, height: 3, background: "#C05640", display: "inline-block", borderRadius: 2, flexShrink: 0 }} />
             Knot strand
           </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#6B8075", display: "inline-block", flexShrink: 0 }} />
-            Sample point
-          </span>
+          {viewMode === "spectral" ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#6B8075", display: "inline-block", flexShrink: 0 }} />
+              Sample point
+            </span>
+          ) : (
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              {[
+                { color: "#C05640", label: "High Entanglement" },
+                { color: "#888C8E", label: "Medium" },
+                { color: "#2C3133", label: "Low" },
+              ].map(({ color, label }) => (
+                <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E", letterSpacing: "0.04em" }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
+                  {label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <GraphVisualizer
           nodes={[]}
           edges={knotResult.edges.map((e) => e as (string | number)[])}
           knotNodes={knotResult.nodes}
+          saliencyScores={knotResult.saliency_scores}
+          viewMode={viewMode}
           height={400}
         />
       </div>
@@ -872,7 +934,7 @@ function Microscope({
           </div>
         ) : isKnotDomain ? (
           knotResult ? (
-            <KnotResultView knotResult={knotResult} domain={domain} />
+            <KnotResultView knotResult={knotResult} domain={domain} viewMode={viewMode} setViewMode={setViewMode} />
           ) : (
             <EmptyMicroscope domain={domain} />
           )

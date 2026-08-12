@@ -222,5 +222,6 @@ class KnotResponse(BaseModel):
     """Response containing 3D coordinates and topological invariants of a knot."""
     nodes: list[dict] = Field(..., description="List of nodes with id, fx, fy, fz")
     edges: list[list[int]] = Field(..., description="List of [source, target] edge pairs")
-    invariants: dict = Field(..., description="Knot invariants (crossing_number, p, q, type)")
+    invariants: dict = Field(..., description="Knot invariants (crossing_number, p, q, type, writhe)")
+    saliency_scores: dict[Union[int, str], float] = Field(..., description="Local entanglement saliency scores mapping node ID to [0.0, 1.0].")
 

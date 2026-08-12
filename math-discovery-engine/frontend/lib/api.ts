@@ -124,6 +124,7 @@ export interface KnotInvariants {
   p: number;
   q: number;
   type: string;
+  writhe: number;
 }
 
 /** Response from POST /api/process-knot */
@@ -131,6 +132,7 @@ export interface KnotResponse {
   nodes: KnotNode[];
   edges: [number, number][];
   invariants: KnotInvariants;
+  saliency_scores: Record<string, number>;
 }
 
 // --- Typed error class -------------------------------------------------------
