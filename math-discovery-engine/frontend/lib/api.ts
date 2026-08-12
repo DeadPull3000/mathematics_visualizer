@@ -145,6 +145,13 @@ export interface ManifoldRequest {
   shape: "Sphere" | "Torus";
   /** Resolution of the parametric grid (number of divisions per axis). */
   resolution?: number;
+  /**
+   * Geometric deformation applied before computing the Cotangent Laplacian.
+   * "none"    — standard parametric surface
+   * "stretch" — prolate ellipsoid (z × 2)
+   * "ripple"  — high-frequency sine interference pattern
+   */
+  deformation?: "none" | "stretch" | "ripple";
 }
 
 /** Topological invariants of the discretised manifold mesh. */
