@@ -838,12 +838,12 @@ function KnotResultView({
           ) : (
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
               {[
-                { color: "#C05640", label: "High Entanglement" },
-                { color: "#888C8E", label: "Medium" },
-                { color: "#2C3133", label: "Low" },
-              ].map(({ color, label }) => (
+                { color: "#C05640", label: "High Entanglement (> 0.6)" },
+                { color: "#D19E4A", label: "Medium (0.3–0.6)" },
+                { color: "#1C1F21", label: "Low (< 0.3)", border: "1px solid #2C3133" },
+              ].map(({ color, label, border }) => (
                 <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E", letterSpacing: "0.04em" }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, border, display: "inline-block", flexShrink: 0 }} />
                   {label}
                 </span>
               ))}
@@ -854,7 +854,7 @@ function KnotResultView({
           nodes={[]}
           edges={knotResult.edges.map((e) => e as (string | number)[])}
           knotNodes={knotResult.nodes}
-          saliencyScores={knotResult.saliency_scores}
+          saliencyScores={knotResult.saliency_scores ?? {}}
           viewMode={viewMode}
           height={400}
         />
