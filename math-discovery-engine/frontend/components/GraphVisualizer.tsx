@@ -70,6 +70,13 @@ export interface GraphVisualizerProps {
    * amplitude: Terracotta (+) · Ochre (≈0) · Sage (−).
    */
   harmonics?: Record<string, number>;
+  /**
+   * Triangular face list — each entry is [node_i, node_j, node_k].
+   * When provided, the visualiser switches to "manifold" mode:
+   * tiny nodes (relSize 2) and delicate wireframe links (width 1, faint Slate).
+   * Harmonic coloring is applied to nodes via the `harmonics` prop.
+   */
+  faces?: [number | string, number | string, number | string][];
   /** Current visualisation mode. Defaults to "spectral". */
   viewMode?: ViewMode;
   /** Canvas height in pixels. Defaults to 400. */
@@ -117,6 +124,7 @@ function GraphVisualizerInner({
   nodes,
   edges,
   knotNodes,
+  faces,
   deletedEdges = [],
   fiedlerVector = {},
   saliencyScores = {},
@@ -128,8 +136,10 @@ function GraphVisualizerInner({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ForceGraph3D = (ForceGraph3DComponent as any);
 
-  // Is the visualiser rendering a parametric knot rather than a force graph?
+  // Is the visualiser rendering a parametric knot / manifold (fixed coords)?
   const isKnotMode = knotNodes !== undefined && knotNodes.length > 0;
+  // Manifold mode: knotNodes supplied AND faces supplied — wireframe mesh aesthetic.
+  const isManifoldMode = isKnotMode && faces !== undefined && faces.length > 0;
 
   // ForceGraph3D instance ref — used to poke the d3 physics engine directly
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -317,7 +327,13 @@ function GraphVisualizerInner({
         nodeId="id"
         nodeColor={(n: FGNode) => n.color}
         nodeLabel={(n: FGNode) => n.label}
-        nodeRelSize={isKnotMode ? (viewMode === "saliency" && !harmonics ? undefined : 3) : (viewMode === "saliency" ? undefined : 5)}
+        nodeRelSize={
+          isManifoldMode
+            ? 2                                                       // manifold: tiny uniform spheres
+            : isKnotMode
+            ? (viewMode === "saliency" && !harmonics ? undefined : 3) // knot: fixed size or entanglement-scaled
+            : (viewMode === "saliency" ? undefined : 5)               // graph: fixed or saliency-scaled
+        }
         nodeVal={
           isKnotMode && viewMode === "saliency" && !harmonics
             ? (n: FGNode) => 2 + n.saliency * 5          // knot: 2–7 by entanglement
@@ -325,13 +341,16 @@ function GraphVisualizerInner({
             ? (n: FGNode) => 3 + n.saliency * 8          // graph: 3–11 by GCN saliency
             : undefined
         }
-        nodeOpacity={isKnotMode ? 1 : 0.92}
+        nodeOpacity={isKnotMode ? (isManifoldMode ? 0.85 : 1) : 0.92}
         onNodeHover={(node: FGNode | null) => setHoveredNode(node)}
         // ── Links ──────────────────────────────────────────────────────────────
-        linkColor={isKnotMode
-          ? (harmonics ? () => "rgba(44, 49, 51, 0.6)" : () => COLORS.partA)  // manifold wireframe vs knot strand
-          : getLinkColor}
-        linkWidth={isKnotMode ? (harmonics ? 1 : 3) : ((link: FGLink) => (link.isDeleted ? 0.5 : 1.5))}
+        linkColor={isManifoldMode
+          ? () => "rgba(44, 49, 51, 0.55)"              // manifold: faint Slate Joint wireframe
+          : isKnotMode
+          ? () => COLORS.partA                           // knot: Terracotta strand
+          : getLinkColor
+        }
+        linkWidth={isManifoldMode ? 1 : isKnotMode ? 3 : ((link: FGLink) => (link.isDeleted ? 0.5 : 1.5))}
         linkOpacity={isKnotMode ? 1 : 0.8}
         linkDashLen={isKnotMode ? undefined : ((link: FGLink) => (link.isDeleted ? 4 : undefined))}
         linkDashGap={isKnotMode ? undefined : ((link: FGLink) => (link.isDeleted ? 3 : undefined))}
