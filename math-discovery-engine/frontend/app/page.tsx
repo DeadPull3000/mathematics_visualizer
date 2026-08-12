@@ -28,11 +28,13 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Download } from "lucide-react";
 import {
   processObject,
+  processKnot,
   exportToPython,
   type InputType,
   type MathRequest,
   type MathResponse,
   type TopologyMetadata,
+  type KnotResponse,
   ApiError,
 } from "@/lib/api";
 import GraphVisualizer from "@/components/GraphVisualizer";
@@ -105,10 +107,6 @@ const DOMAINS: Domain[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Sidebar
-// ---------------------------------------------------------------------------
-
 function Sidebar({
   selected,
   onSelect,
@@ -133,7 +131,7 @@ function Sidebar({
             Discovery Engine
           </span>
         </div>
-        <span style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.08em" }}>VISUAL MATH · v0.2</span>
+        <span style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.08em" }}>VISUAL MATH · v0.7</span>
       </div>
 
       <div style={{ padding: "0 20px 12px", color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" }}>
@@ -142,20 +140,23 @@ function Sidebar({
 
       {DOMAINS.map((d) => {
         const isActive = d.id === selected.id;
+        const isLive = d.id === "combinatorics" || d.id === "knot";
         return (
           <button
             key={d.id}
             id={`domain-btn-${d.id}`}
-            onClick={() => onSelect(d)}
+            onClick={() => isLive && onSelect(d)}
             style={{
               background: isActive ? "#222628" : "transparent",
               border: "none",
               borderLeft: isActive ? `2px solid ${d.color}` : "2px solid transparent",
-              cursor: "pointer", padding: "12px 20px", textAlign: "left",
+              cursor: isLive ? "pointer" : "default",
+              padding: "12px 20px", textAlign: "left",
               transition: "all 0.15s ease", display: "flex", alignItems: "center", gap: 12,
+              opacity: isLive ? 1 : 0.4,
             }}
-            onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "#1e2124"; }}
-            onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+            onMouseEnter={(e) => { if (!isActive && isLive) (e.currentTarget as HTMLButtonElement).style.background = "#1e2124"; }}
+            onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = isActive ? "#222628" : "transparent"; }}
           >
             <span style={{ fontSize: 18, width: 26, textAlign: "center", color: isActive ? d.color : "#888C8E", transition: "color 0.15s" }}>
               {d.icon}
@@ -164,7 +165,9 @@ function Sidebar({
               <div style={{ color: isActive ? "#E6E4DF" : "#888C8E", fontSize: 13, fontWeight: isActive ? 600 : 400, transition: "color 0.15s", letterSpacing: "0.01em" }}>
                 {d.label}
               </div>
-              <div style={{ color: "#888C8E", fontSize: 10, marginTop: 1 }}>{d.subtitle}</div>
+              <div style={{ color: "#888C8E", fontSize: 10, marginTop: 1 }}>
+                {isLive ? d.subtitle : "Coming soon"}
+              </div>
             </div>
           </button>
         );
@@ -176,6 +179,53 @@ function Sidebar({
         </div>
       </div>
     </aside>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// KnotDropzone — simplified formula-only input for Knot Theory domain
+// ---------------------------------------------------------------------------
+
+function KnotDropzone({
+  domain,
+  knotFormula,
+  setKnotFormula,
+}: {
+  domain: Domain;
+  knotFormula: string;
+  setKnotFormula: (v: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
+        Enter a torus knot formula
+      </div>
+      <input
+        id="knot-formula-input"
+        type="text"
+        value={knotFormula}
+        onChange={(e) => setKnotFormula(e.target.value)}
+        placeholder="e.g.  T_3_2  or  T_5_3"
+        style={{
+          background: "#111315", border: "1px solid #2C3133",
+          borderRadius: 10, color: "#E6E4DF",
+          fontFamily: "'Georgia', serif", fontSize: 22,
+          padding: "16px 18px", outline: "none",
+          transition: "border-color 0.15s", letterSpacing: "0.1em",
+        }}
+        onFocus={(e) => { e.target.style.borderColor = domain.color; }}
+        onBlur={(e) => { e.target.style.borderColor = "#2C3133"; }}
+        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+      />
+      <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 10, padding: "16px 18px", color: "#888C8E", fontSize: 11, lineHeight: 2 }}>
+        <span style={{ color: domain.color, fontWeight: 600, letterSpacing: "0.04em" }}>Supported knots — T_p_q (Torus Knots)</span><br />
+        <code style={{ color: "#E6E4DF" }}>T_3_2</code>  — Trefoil knot  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: "#D19E4A", fontFamily: "'Georgia',serif", fontSize: 12 }}>c = 3</span><br />
+        <code style={{ color: "#E6E4DF" }}>T_5_2</code>  — Cinquefoil knot &nbsp;&nbsp;<span style={{ color: "#D19E4A", fontFamily: "'Georgia',serif", fontSize: 12 }}>c = 5</span><br />
+        <code style={{ color: "#E6E4DF" }}>T_5_3</code>  — Torus knot (5,3) &nbsp;<span style={{ color: "#D19E4A", fontFamily: "'Georgia',serif", fontSize: 12 }}>c = 8</span><br />
+        <code style={{ color: "#E6E4DF" }}>T_7_2</code>  — Heptafoil knot &nbsp;&nbsp;<span style={{ color: "#D19E4A", fontFamily: "'Georgia',serif", fontSize: 12 }}>c = 7</span><br />
+        <span style={{ color: "#2C3133", fontSize: 10 }}>Formula: c = min(p(q−1), q(p−1)) · Both p, q must be coprime integers ≥ 2</span>
+      </div>
+    </div>
   );
 }
 
@@ -659,8 +709,101 @@ function ResultView({
 // Microscope wrapper
 // ---------------------------------------------------------------------------
 
+function KnotResultView({
+  knotResult,
+  domain,
+}: {
+  knotResult: KnotResponse;
+  domain: Domain;
+}) {
+  const inv = knotResult.invariants;
+  const rows = [
+    { name: "Knot Type",       value: inv.type,             color: domain.color,  desc: "Family of knot / link" },
+    { name: "Parameters (p,q)",value: `(${inv.p}, ${inv.q})`, color: "#D19E4A",  desc: "Torus knot winding numbers" },
+    { name: "Crossing Number", value: inv.crossing_number,  color: "#C05640",    desc: "Minimum crossings over all diagrams" },
+    { name: "Strand Count",    value: knotResult.nodes.length, color: "#6B8075", desc: "Parametric sample points" },
+  ];
+
+  return (
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Summary cards */}
+      <div style={{ display: "flex", gap: 12 }}>
+        {[
+          { label: "p",           value: inv.p,              color: "#D19E4A" },
+          { label: "q",           value: inv.q,              color: "#6B8075" },
+          { label: "Crossings c", value: inv.crossing_number, color: "#C05640" },
+        ].map((s) => (
+          <div key={s.label} style={{ flex: 1, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
+            <div style={{ color: s.color, fontSize: 26, fontWeight: 700, fontFamily: "'Georgia', serif", lineHeight: 1, marginBottom: 6 }}>{s.value}</div>
+            <div style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Invariants table */}
+      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#1C1F21", overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid #2C3133" }}>
+              {["Invariant", "Value", "Mathematical Meaning"].map((h) => (
+                <th key={h} style={{ padding: "10px 14px", color: "#888C8E", fontWeight: 600, fontSize: 10, letterSpacing: "0.08em", textAlign: "left", textTransform: "uppercase" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={row.name}
+                style={{ borderBottom: i < rows.length - 1 ? "1px solid #2C3133" : "none", transition: "background 0.1s" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#22262850"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
+              >
+                <td style={{ padding: "11px 14px", color: "#E6E4DF", fontWeight: 500, whiteSpace: "nowrap" }}>{row.name}</td>
+                <td style={{ padding: "11px 14px" }}>
+                  <span style={{ background: "#2C3133", color: row.color, borderRadius: 5, padding: "3px 10px", fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    {String(row.value)}
+                  </span>
+                </td>
+                <td style={{ padding: "11px 14px", color: "#888C8E", fontSize: 11, lineHeight: 1.5 }}>{row.desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 3D Knot Visualizer */}
+      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Torus Knot · 3D Parametric Curve (WebGL)
+          </div>
+          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
+            T({inv.p},{inv.q}) · c = {inv.crossing_number}
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
+            <span style={{ width: 18, height: 3, background: "#C05640", display: "inline-block", borderRadius: 2, flexShrink: 0 }} />
+            Knot strand
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#6B8075", display: "inline-block", flexShrink: 0 }} />
+            Sample point
+          </span>
+        </div>
+        <GraphVisualizer
+          nodes={[]}
+          edges={knotResult.edges.map((e) => e as (string | number)[])}
+          knotNodes={knotResult.nodes}
+          height={400}
+        />
+      </div>
+    </div>
+  );
+}
+
 function Microscope({
   result,
+  knotResult,
   domain,
   error,
   viewMode,
@@ -670,6 +813,7 @@ function Microscope({
   deletedEdges,
 }: {
   result: MathResponse | null;
+  knotResult: KnotResponse | null;
   domain: Domain;
   error: string | null;
   viewMode: "spectral" | "saliency";
@@ -678,6 +822,7 @@ function Microscope({
   perturbationCount?: number;
   deletedEdges?: (string | number)[][];
 }) {
+  const isKnotDomain = domain.id === "knot";
   return (
     <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 400 }}>
       <div style={{ padding: "12px 18px", borderBottom: "1px solid #2C3133", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
@@ -685,7 +830,7 @@ function Microscope({
           <span style={{ color: domain.color, fontSize: 14 }}>◉</span>
           <span style={{ color: "#E6E4DF", fontSize: 12, fontWeight: 600, letterSpacing: "0.06em" }}>STRUCTURE MICROSCOPE</span>
         </div>
-        {result && (
+        {result && !isKnotDomain && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ background: "#6B807520", border: "1px solid #6B8075", color: "#6B8075", borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
               {result.metadata.num_nodes}V · {result.metadata.num_edges}E
@@ -710,8 +855,13 @@ function Microscope({
             )}
           </div>
         )}
+        {knotResult && isKnotDomain && (
+          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
+            Torus Knot · {knotResult.nodes.length} pts
+          </span>
+        )}
       </div>
-      <div style={{ flex: 1, display: "flex", alignItems: error || !result ? "center" : "flex-start", justifyContent: error || !result ? "center" : "flex-start", padding: 24, overflowY: "auto" }}>
+      <div style={{ flex: 1, display: "flex", alignItems: error || (!result && !knotResult) ? "center" : "flex-start", justifyContent: error || (!result && !knotResult) ? "center" : "flex-start", padding: 24, overflowY: "auto" }}>
         {error ? (
           <div style={{ textAlign: "center", maxWidth: 420 }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚠</div>
@@ -720,6 +870,12 @@ function Microscope({
               {error}
             </div>
           </div>
+        ) : isKnotDomain ? (
+          knotResult ? (
+            <KnotResultView knotResult={knotResult} domain={domain} />
+          ) : (
+            <EmptyMicroscope domain={domain} />
+          )
         ) : result ? (
           <ResultView result={result} domain={domain} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={onEdgeRemove} deletedEdges={deletedEdges} />
         ) : (
@@ -898,10 +1054,12 @@ export default function HomePage() {
   const [inputMode, setInputMode] = useState<InputMode>("paste");
   const [pastedText, setPastedText] = useState("");
   const [formulaText, setFormulaText] = useState("K_5");
+  const [knotFormula, setKnotFormula] = useState("T_3_2");
   const [fileContent, setFileContent] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<MathResponse | null>(null);
+  const [knotResult, setKnotResult] = useState<KnotResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paramsOpen, setParamsOpen] = useState(false);
   const [params, setParams] = useState<Record<string, number>>({
@@ -917,7 +1075,21 @@ export default function HomePage() {
   // history: the Laboratory Ledger timeline.
   const [history, setHistory] = useState<{ id: string; type: "genesis" | "cut"; detail: string }[]>([]);
 
-  useEffect(() => { setResult(null); setError(null); }, [selectedDomain]);
+  const isKnotDomain = selectedDomain.id === "knot";
+
+  // Clear results when switching domain
+  const handleDomainSelect = useCallback((d: Domain) => {
+    setSelectedDomain(d);
+    setResult(null);
+    setKnotResult(null);
+    setError(null);
+    setHistory([]);
+    setDeletedEdges([]);
+    setCurrentEdges([]);
+    setPerturbationCount(0);
+  }, []);
+
+  useEffect(() => { setResult(null); setKnotResult(null); setError(null); }, [selectedDomain]);
 
   const handleFileLoad = useCallback((raw: string) => {
     setFileContent(raw);
@@ -925,7 +1097,30 @@ export default function HomePage() {
   }, []);
 
   const handleDiscover = useCallback(async () => {
-    setIsLoading(true); setError(null); setResult(null);
+    setIsLoading(true); setError(null); setResult(null); setKnotResult(null);
+
+    // ── Knot Theory domain ─────────────────────────────────────────────────
+    if (isKnotDomain) {
+      const trimmed = knotFormula.trim();
+      if (!trimmed) {
+        setError("Knot formula is empty. Try T_3_2 for a Trefoil.");
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const response = await processKnot({ formula: trimmed });
+        setKnotResult(response);
+      } catch (err) {
+        let msg: string;
+        if (err instanceof ApiError) msg = err.detail;
+        else if (err instanceof Error) msg = err.message;
+        else msg = String(err);
+        setError(msg);
+      } finally { setIsLoading(false); }
+      return;
+    }
+
+    // ── Combinatorics / other graph domains ────────────────────────────────
     try {
       let inputType: InputType;
       let rawData: string;
@@ -948,10 +1143,6 @@ export default function HomePage() {
       setPerturbationCount(0);
       setHistory([{ id: "genesis", type: "genesis", detail: `Origin: ${rawData.slice(0, 40).replace(/\n/g, " · ")}` }]);
     } catch (err) {
-      // Extract the most human-readable message from any error shape:
-      //   ApiError  → err.detail (set by apiFetch, includes HTTP context)
-      //   Error     → err.message (standard JS Error)
-      //   unknown   → String(err) as last resort
       let msg: string;
       if (err instanceof ApiError) {
         msg = err.detail;
@@ -962,7 +1153,7 @@ export default function HomePage() {
       }
       setError(msg);
     } finally { setIsLoading(false); }
-  }, [selectedDomain, inputMode, pastedText, formulaText, fileContent]);
+  }, [isKnotDomain, knotFormula, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
 
   /**
    * handleEdgeRemove — called by GraphVisualizer when the user clicks an edge.
@@ -1048,7 +1239,7 @@ export default function HomePage() {
 
         {/* Body */}
         <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-          <Sidebar selected={selectedDomain} onSelect={setSelectedDomain} />
+          <Sidebar selected={selectedDomain} onSelect={handleDomainSelect} />
 
           {/* Central scrollable column */}
           <main style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: 32, display: "flex", flexDirection: "column", gap: 32 }}>
@@ -1064,17 +1255,29 @@ export default function HomePage() {
             {/* Dropzone card */}
             <section style={{ flexShrink: 0, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: 280 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>⬆ Input / Data Source</span>
-                <span style={{ color: "#888C8E", fontSize: 10 }}>All parsing is performed server-side</span>
+                <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                  {isKnotDomain ? "∞ Knot Formula" : "⬆ Input / Data Source"}
+                </span>
+                <span style={{ color: "#888C8E", fontSize: 10 }}>
+                  {isKnotDomain ? "Torus knot parametric engine" : "All parsing is performed server-side"}
+                </span>
               </div>
-              <Dropzone
-                domain={selectedDomain}
-                inputMode={inputMode} setInputMode={setInputMode}
-                pastedText={pastedText} setPastedText={setPastedText}
-                formulaText={formulaText} setFormulaText={setFormulaText}
-                onFileLoad={handleFileLoad}
-                isDragging={isDragging} setIsDragging={setIsDragging}
-              />
+              {isKnotDomain ? (
+                <KnotDropzone
+                  domain={selectedDomain}
+                  knotFormula={knotFormula}
+                  setKnotFormula={setKnotFormula}
+                />
+              ) : (
+                <Dropzone
+                  domain={selectedDomain}
+                  inputMode={inputMode} setInputMode={setInputMode}
+                  pastedText={pastedText} setPastedText={setPastedText}
+                  formulaText={formulaText} setFormulaText={setFormulaText}
+                  onFileLoad={handleFileLoad}
+                  isDragging={isDragging} setIsDragging={setIsDragging}
+                />
+              )}
             </section>
 
             {/* Discover Structure button */}
@@ -1096,15 +1299,15 @@ export default function HomePage() {
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
             >
               {isLoading ? (
-                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> Computing Invariants…</>
+                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isKnotDomain ? "Generating Knot…" : "Computing Invariants…"}</>
               ) : (
-                <><span>⚗</span> Discover Structure</>
+                <><span>{isKnotDomain ? "∞" : "⚗"}</span> {isKnotDomain ? "Generate Knot" : "Discover Structure"}</>
               )}
             </button>
 
             {/* Structure Microscope */}
             <section style={{ flexShrink: 0, minHeight: 400 }}>
-              <Microscope result={result} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={handleEdgeRemove} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
+              <Microscope result={result} knotResult={knotResult} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain ? undefined : handleEdgeRemove} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
             </section>
           </main>
 

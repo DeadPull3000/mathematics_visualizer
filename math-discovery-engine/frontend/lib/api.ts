@@ -99,6 +99,40 @@ export interface HealthResponse {
   libraries: Record<string, string>;
 }
 
+// --- Knot Theory types -------------------------------------------------------
+
+/** Request body for POST /api/process-knot */
+export interface KnotRequest {
+  /** Torus knot formula, e.g. T_3_2 (Trefoil) or T_5_3. */
+  formula: string;
+}
+
+/** A single node with fixed 3D world-space coordinates. */
+export interface KnotNode {
+  id: number;
+  /** Fixed x coordinate (physics-locked in the 3D engine). */
+  fx: number;
+  /** Fixed y coordinate. */
+  fy: number;
+  /** Fixed z coordinate. */
+  fz: number;
+}
+
+/** Topological invariants of a (p, q)-torus knot. */
+export interface KnotInvariants {
+  crossing_number: number;
+  p: number;
+  q: number;
+  type: string;
+}
+
+/** Response from POST /api/process-knot */
+export interface KnotResponse {
+  nodes: KnotNode[];
+  edges: [number, number][];
+  invariants: KnotInvariants;
+}
+
 // --- Typed error class -------------------------------------------------------
 
 export class ApiError extends Error {
@@ -308,4 +342,19 @@ export async function exportToPython(request: MathRequest): Promise<void> {
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(objectUrl);
+}
+
+/**
+ * Send a knot formula to the backend and receive 3D geometry + invariants.
+ *
+ * @param request  A KnotRequest with a formula like "T_3_2".
+ *
+ * @example
+ * const knot = await processKnot({ formula: "T_3_2" });
+ */
+export async function processKnot(request: KnotRequest): Promise<KnotResponse> {
+  return apiFetch<KnotResponse>("/api/process-knot", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
 }

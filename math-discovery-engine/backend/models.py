@@ -212,3 +212,15 @@ class MathResponse(BaseModel):
         description="Spectral topological features (Laplacian).",
     )
 
+
+class KnotRequest(BaseModel):
+    """Payload for Knot Theory computations."""
+    formula: str = Field(..., description="Knot formula, e.g., T_3_2")
+
+
+class KnotResponse(BaseModel):
+    """Response containing 3D coordinates and topological invariants of a knot."""
+    nodes: list[dict] = Field(..., description="List of nodes with id, fx, fy, fz")
+    edges: list[list[int]] = Field(..., description="List of [source, target] edge pairs")
+    invariants: dict = Field(..., description="Knot invariants (crossing_number, p, q, type)")
+

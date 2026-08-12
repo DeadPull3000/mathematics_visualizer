@@ -50,6 +50,12 @@ export interface GraphVisualizerProps {
   /** Active edge list as [source, target] pairs (drives maths). */
   edges: RawNode[][];
   /**
+   * Optional knot nodes with fixed 3D world-space coordinates.
+   * When provided the visualizer renders in "knot" mode:
+   * physics is bypassed, nodes are pinned, and links form a smooth continuous curve.
+   */
+  knotNodes?: { id: number; fx: number; fy: number; fz: number }[];
+  /**
    * Deleted edges — kept in the 3D engine as ghost strands with zero force.
    * Revealed only when the user hovers a connected node.
    */
@@ -78,6 +84,10 @@ interface FGNode {
   color: string;
   label: string;
   saliency: number;
+  // Fixed 3D coords — present only for knot nodes
+  fx?: number;
+  fy?: number;
+  fz?: number;
 }
 
 interface FGLink {
@@ -100,6 +110,7 @@ function resolveId(endpoint: string | FGNode): string {
 function GraphVisualizerInner({
   nodes,
   edges,
+  knotNodes,
   deletedEdges = [],
   fiedlerVector = {},
   saliencyScores = {},
@@ -110,6 +121,9 @@ function GraphVisualizerInner({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ForceGraph3D = (ForceGraph3DComponent as any);
 
+  // Is the visualiser rendering a parametric knot rather than a force graph?
+  const isKnotMode = knotNodes !== undefined && knotNodes.length > 0;
+
   // ForceGraph3D instance ref — used to poke the d3 physics engine directly
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fgRef = useRef<any>(null);
@@ -119,6 +133,26 @@ function GraphVisualizerInner({
 
   // ── Build graphData (nodes + active + ghost links) ──────────────────────
   const graphData = useMemo<{ nodes: FGNode[]; links: FGLink[] }>(() => {
+    // ── Knot mode: use the pre-computed fixed coordinates ───────────────────
+    if (isKnotMode && knotNodes) {
+      const knotNodeObjs: FGNode[] = knotNodes.map((n) => ({
+        id: String(n.id),
+        color: COLORS.partB,   // Sage — calm, mathematical
+        label: `Point ${n.id}`,
+        saliency: 0,
+        fx: n.fx,
+        fy: n.fy,
+        fz: n.fz,
+      }));
+      const knotLinks: FGLink[] = edges.map(([src, tgt]) => ({
+        source: String(src),
+        target: String(tgt),
+        isDeleted: false,
+      }));
+      return { nodes: knotNodeObjs, links: knotLinks };
+    }
+
+    // ── Standard graph mode ─────────────────────────────────────────────────
     const nodeObjs: FGNode[] = nodes.map((rawId) => {
       const key = String(rawId);
 
@@ -157,7 +191,7 @@ function GraphVisualizerInner({
     }));
 
     return { nodes: nodeObjs, links: [...activeLinks, ...ghostLinks] };
-  }, [nodes, edges, deletedEdges, fiedlerVector, saliencyScores, viewMode]);
+  }, [isKnotMode, knotNodes, nodes, edges, deletedEdges, fiedlerVector, saliencyScores, viewMode]);
 
   // ── Zero-out ghost link force after graphData changes ───────────────────
   useEffect(() => {
@@ -247,23 +281,23 @@ function GraphVisualizerInner({
         nodeId="id"
         nodeColor={(n: FGNode) => n.color}
         nodeLabel={(n: FGNode) => n.label}
-        nodeRelSize={viewMode === "saliency" ? undefined : 5}
-        nodeVal={viewMode === "saliency" ? (n: FGNode) => 3 + n.saliency * 8 : undefined}
-        nodeOpacity={0.92}
+        nodeRelSize={isKnotMode ? 2 : (viewMode === "saliency" ? undefined : 5)}
+        nodeVal={(!isKnotMode && viewMode === "saliency") ? (n: FGNode) => 3 + n.saliency * 8 : undefined}
+        nodeOpacity={isKnotMode ? 1 : 0.92}
         onNodeHover={(node: FGNode | null) => setHoveredNode(node)}
         // ── Links ──────────────────────────────────────────────────────────
-        linkColor={getLinkColor}
-        linkWidth={(link: FGLink) => (link.isDeleted ? 0.5 : 1.5)}
-        linkOpacity={0.8}
-        linkDashLen={(link: FGLink) => (link.isDeleted ? 4 : undefined)}
-        linkDashGap={(link: FGLink) => (link.isDeleted ? 3 : undefined)}
-        linkVisibility={getLinkVisibility}
+        linkColor={isKnotMode ? () => COLORS.partA : getLinkColor}
+        linkWidth={isKnotMode ? 3 : ((link: FGLink) => (link.isDeleted ? 0.5 : 1.5))}
+        linkOpacity={isKnotMode ? 1 : 0.8}
+        linkDashLen={isKnotMode ? undefined : ((link: FGLink) => (link.isDeleted ? 4 : undefined))}
+        linkDashGap={isKnotMode ? undefined : ((link: FGLink) => (link.isDeleted ? 3 : undefined))}
+        linkVisibility={isKnotMode ? true : getLinkVisibility}
         linkHoverPrecision={onEdgeRemove ? 6 : 2}
-        onLinkHover={handleLinkHover}
-        onLinkClick={handleLinkClick}
+        onLinkHover={isKnotMode ? undefined : handleLinkHover}
+        onLinkClick={isKnotMode ? undefined : handleLinkClick}
         // ── Performance ────────────────────────────────────────────────────
-        warmupTicks={60}
-        cooldownTime={3000}
+        warmupTicks={isKnotMode ? 0 : 60}
+        cooldownTime={isKnotMode ? 0 : 3000}
         showNavInfo={false}
       />
 
