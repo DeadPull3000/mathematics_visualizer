@@ -1,13 +1,60 @@
 import numpy as np
-import networkx as nx
 import scipy.linalg as la
+
+
+def compute_cotangent_laplacian(nodes: list[dict], faces: list[list[int]]) -> np.ndarray:
+    """
+    Computes the cotangent weight Laplacian matrix for a given triangular mesh.
+    """
+    N = len(nodes)
+    V = np.zeros((N, 3))
+    for node in nodes:
+        V[node["id"]] = [node["fx"], node["fy"], node["fz"]]
+
+    W = np.zeros((N, N))
+
+    for face in faces:
+        i, j, k = face
+        
+        # Edge i-j, opposite k
+        u = V[i] - V[k]
+        v = V[j] - V[k]
+        cross_norm = np.linalg.norm(np.cross(u, v))
+        cot_alpha = np.dot(u, v) / cross_norm if cross_norm > 1e-8 else 0.0
+        W[i, j] += 0.5 * cot_alpha
+        W[j, i] += 0.5 * cot_alpha
+        
+        # Edge j-k, opposite i
+        u = V[j] - V[i]
+        v = V[k] - V[i]
+        cross_norm = np.linalg.norm(np.cross(u, v))
+        cot_beta = np.dot(u, v) / cross_norm if cross_norm > 1e-8 else 0.0
+        W[j, k] += 0.5 * cot_beta
+        W[k, j] += 0.5 * cot_beta
+        
+        # Edge k-i, opposite j
+        u = V[k] - V[j]
+        v = V[i] - V[j]
+        cross_norm = np.linalg.norm(np.cross(u, v))
+        cot_gamma = np.dot(u, v) / cross_norm if cross_norm > 1e-8 else 0.0
+        W[k, i] += 0.5 * cot_gamma
+        W[i, k] += 0.5 * cot_gamma
+
+    # Constrain weights to be non-negative for stability
+    W = np.clip(W, 0.0, None)
+    
+    D = np.diag(np.sum(W, axis=1))
+    L = D - W
+    return L
+
 
 def generate_manifold(shape: str, res: int = 15) -> dict:
     """
     Generate parametric meshes for Topology domain.
+    Outputs nodes, faces, edges, invariants, and cotangent laplacian harmonics.
     """
     nodes = []
-    G = nx.Graph()
+    faces = []
     
     if shape.lower() == "sphere":
         theta = np.linspace(0, np.pi, res)
@@ -26,16 +73,17 @@ def generate_manifold(shape: str, res: int = 15) -> dict:
                     "fy": float(y),
                     "fz": float(z)
                 })
-                G.add_node(node_id)
+        
+        for i in range(res - 1):
+            for j in range(res):
+                A = i * res + j
+                B = i * res + (j + 1) % res
+                C = (i + 1) * res + j
+                D = (i + 1) * res + (j + 1) % res
                 
-                # Edges
-                # Horizontal (phi, wrap around)
-                G.add_edge(node_id, i * res + (j + 1) % res)
+                faces.append([A, B, C])
+                faces.append([B, D, C])
                 
-                # Vertical (theta, no wrap over poles)
-                if i < res - 1:
-                    G.add_edge(node_id, (i + 1) * res + j)
-                    
         euler_char = 2
         
     elif shape.lower() == "torus":
@@ -57,37 +105,47 @@ def generate_manifold(shape: str, res: int = 15) -> dict:
                     "fy": float(y),
                     "fz": float(z)
                 })
-                G.add_node(node_id)
                 
-                # Edges (wrap both ways)
-                G.add_edge(node_id, i * res + (j + 1) % res)
-                G.add_edge(node_id, ((i + 1) % res) * res + j)
+        for i in range(res):
+            for j in range(res):
+                A = i * res + j
+                B = i * res + (j + 1) % res
+                C = ((i + 1) % res) * res + j
+                D = ((i + 1) % res) * res + (j + 1) % res
+                
+                faces.append([A, B, C])
+                faces.append([B, D, C])
                 
         euler_char = 0
         
     else:
         raise ValueError(f"Unknown shape: {shape}")
         
-    # Simplify graph to remove duplicate edges
-    G = nx.Graph(G)
+    # Extract unique edges from faces
+    edges_set = set()
+    for face in faces:
+        for u, v in [(face[0], face[1]), (face[1], face[2]), (face[2], face[0])]:
+            if u > v:
+                u, v = v, u
+            edges_set.add((u, v))
+            
+    edges_list = [list(e) for e in edges_set]
+    num_vertices = len(nodes)
+    num_edges = len(edges_list)
     
-    edges_list = [[u, v] for u, v in G.edges()]
-    num_vertices = G.number_of_nodes()
-    num_edges = G.number_of_edges()
-    
-    # Compute Combinatorial Laplacian and harmonics
-    L = nx.laplacian_matrix(G).todense()
+    # Compute Cotangent Laplacian and harmonics
+    L = compute_cotangent_laplacian(nodes, faces)
     eigenvalues, eigenvectors = la.eigh(L)
     
-    # 2nd non-zero eigenvector (Fiedler vector / spherical harmonic)
-    # The first eigenvalue is 0
+    # 2nd non-zero eigenvector
     harmonics_vec = eigenvectors[:, 1]
     
-    harmonics = {node: float(val) for node, val in zip(G.nodes(), harmonics_vec)}
+    harmonics = {node["id"]: float(val) for node, val in zip(nodes, harmonics_vec)}
     
     return {
         "nodes": nodes,
         "edges": edges_list,
+        "faces": faces,
         "invariants": {
             "vertices": num_vertices,
             "edges": num_edges,

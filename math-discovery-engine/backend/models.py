@@ -234,5 +234,6 @@ class ManifoldResponse(BaseModel):
     """Response containing 3D coordinates and invariants of a manifold mesh."""
     nodes: list[dict] = Field(..., description="List of nodes with id, fx, fy, fz")
     edges: list[list[Union[int, str]]] = Field(..., description="List of [source, target] edge pairs")
+    faces: list[list[int]] = Field(..., description="List of [node_i, node_j, node_k] triangular faces")
     invariants: dict = Field(..., description="Manifold invariants (vertices, edges, euler_characteristic)")
     harmonics: dict[Union[int, str], float] = Field(..., description="2nd non-zero eigenvector of the Combinatorial Laplacian")
