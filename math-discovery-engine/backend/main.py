@@ -24,12 +24,13 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
-from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse
+from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse, CircuitRequest, CircuitResponse
 from parsers import parse_edge_list, parse_formula, parse_json
 from topology import compute_spectral_topology, compute_betti_numbers
 from ml_engine import compute_gradient_saliency
 from knot_theory import generate_torus_knot
 from manifolds import generate_manifold
+from complexity import parse_boolean_circuit
 import re
 
 # --- Logging ------------------------------------------------------------------
@@ -398,3 +399,29 @@ async def process_manifold(payload: ManifoldRequest) -> ManifoldResponse:
             detail=f"Manifold generation error: {exc}",
         ) from exc
 
+@app.post(
+    "/api/process-circuit",
+    response_model=CircuitResponse,
+    summary="Parse boolean formula and compute circuit depth/critical path",
+    status_code=status.HTTP_200_OK,
+    tags=["Complexity"],
+)
+async def process_circuit(payload: CircuitRequest) -> CircuitResponse:
+    """
+    Accepts a boolean formula string, parses it into a DAG, and returns the circuit
+    invariants including depth (longest path) and saliency map (critical path).
+    """
+    try:
+        circuit_data = parse_boolean_circuit(payload.formula)
+        return CircuitResponse(**circuit_data)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc)
+        ) from exc
+    except Exception as exc:
+        log.exception("Circuit generation failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Circuit generation error: {exc}",
+        ) from exc

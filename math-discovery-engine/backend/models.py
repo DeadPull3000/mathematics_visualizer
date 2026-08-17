@@ -246,3 +246,14 @@ class ManifoldResponse(BaseModel):
     faces: list[list[int]] = Field(..., description="List of [node_i, node_j, node_k] triangular faces")
     invariants: dict = Field(..., description="Manifold invariants (vertices, edges, euler_characteristic)")
     harmonics: dict[Union[int, str], float] = Field(..., description="2nd non-zero eigenvector of the Combinatorial Laplacian")
+
+class CircuitRequest(BaseModel):
+    """Payload for Complexity Theory boolean circuit computations."""
+    formula: str = Field(..., description="Boolean logic formula string")
+
+class CircuitResponse(BaseModel):
+    """Response containing a DAG boolean circuit representation and complexity metrics."""
+    nodes: list[dict] = Field(..., description="List of nodes with id and gate_type")
+    edges: list[list[str]] = Field(..., description="List of [source, target] directed edges")
+    invariants: dict = Field(..., description="Circuit invariants (depth, num_gates, num_vars)")
+    saliency_scores: dict[str, float] = Field(..., description="Saliency mapping (1.0 on critical path, 0.2 otherwise)")
