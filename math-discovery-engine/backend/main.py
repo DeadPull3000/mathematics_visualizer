@@ -376,6 +376,13 @@ async def process_manifold(payload: ManifoldRequest) -> ManifoldResponse:
             shape=payload.shape,
             res=payload.resolution,
             deformation=payload.deformation,
+            expr_x=payload.expr_x,
+            expr_y=payload.expr_y,
+            expr_z=payload.expr_z,
+            u_min=payload.u_min,
+            u_max=payload.u_max,
+            v_min=payload.v_min,
+            v_max=payload.v_max,
         )
         return ManifoldResponse(**manifold_data)
     except ValueError as exc:

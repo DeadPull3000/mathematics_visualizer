@@ -227,9 +227,16 @@ class KnotResponse(BaseModel):
 
 class ManifoldRequest(BaseModel):
     """Payload for Manifold computations."""
-    shape: str = Field(..., description="Manifold shape, e.g., 'Sphere' or 'Torus'")
+    shape: str = Field(..., description="Manifold shape, e.g., 'Sphere', 'Torus', or 'Custom'")
     resolution: int = Field(15, description="Resolution of the parametric grid")
     deformation: str = Field("none", description="Deformation type: 'none', 'stretch', or 'ripple'")
+    expr_x: str = Field("", description="Custom parametric equation for X(u, v)")
+    expr_y: str = Field("", description="Custom parametric equation for Y(u, v)")
+    expr_z: str = Field("", description="Custom parametric equation for Z(u, v)")
+    u_min: float = Field(0.0, description="Minimum value for u")
+    u_max: float = Field(6.28318, description="Maximum value for u")
+    v_min: float = Field(0.0, description="Minimum value for v")
+    v_max: float = Field(6.28318, description="Maximum value for v")
 
 class ManifoldResponse(BaseModel):
     """Response containing 3D coordinates and invariants of a manifold mesh."""

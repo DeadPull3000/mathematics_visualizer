@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.linalg as la
+import numexpr as ne
 
 
 def compute_cotangent_laplacian(nodes: list[dict], faces: list[list[int]]) -> np.ndarray:
@@ -48,7 +49,18 @@ def compute_cotangent_laplacian(nodes: list[dict], faces: list[list[int]]) -> np
     return L
 
 
-def generate_manifold(shape: str, res: int = 15, deformation: str = "none") -> dict:
+def generate_manifold(
+    shape: str,
+    res: int = 15,
+    deformation: str = "none",
+    expr_x: str = "",
+    expr_y: str = "",
+    expr_z: str = "",
+    u_min: float = 0.0,
+    u_max: float = 6.28318,
+    v_min: float = 0.0,
+    v_max: float = 6.28318
+) -> dict:
     """
     Generate parametric meshes for Topology domain.
     Outputs nodes, faces, edges, invariants, and cotangent laplacian harmonics.
@@ -135,6 +147,63 @@ def generate_manifold(shape: str, res: int = 15, deformation: str = "none") -> d
                 faces.append([B, D, C])
                 
         euler_char = 0
+        
+    elif shape.lower() == "custom":
+        if not (expr_x and expr_y and expr_z):
+            raise ValueError("expr_x, expr_y, and expr_z must be provided for Custom shape.")
+            
+        u_arr = np.linspace(u_min, u_max, res)
+        v_arr = np.linspace(v_min, v_max, res)
+        u, v = np.meshgrid(u_arr, v_arr, indexing='ij')
+        
+        local_dict = {'u': u, 'v': v, 'pi': np.pi}
+        
+        try:
+            x_eval = ne.evaluate(expr_x, local_dict=local_dict)
+            y_eval = ne.evaluate(expr_y, local_dict=local_dict)
+            z_eval = ne.evaluate(expr_z, local_dict=local_dict)
+            
+            # Broadcast scalars to full grid if necessary
+            x_eval = np.broadcast_to(np.array(x_eval, dtype=float), (res, res))
+            y_eval = np.broadcast_to(np.array(y_eval, dtype=float), (res, res))
+            z_eval = np.broadcast_to(np.array(z_eval, dtype=float), (res, res))
+        except Exception as e:
+            raise ValueError(f"Failed to evaluate custom formulas: {e}")
+            
+        for i in range(res):
+            for j in range(res):
+                node_id = i * res + j
+                x = float(x_eval[i, j])
+                y = float(y_eval[i, j])
+                z = float(z_eval[i, j])
+                
+                if deformation == "stretch":
+                    z *= 2.0
+                elif deformation == "ripple":
+                    z += 0.3 * np.sin(5 * x) * np.cos(5 * y)
+                    
+                x *= 50
+                y *= 50
+                z *= 50
+                
+                nodes.append({
+                    "id": node_id,
+                    "fx": float(x),
+                    "fy": float(y),
+                    "fz": float(z)
+                })
+                
+        for i in range(res - 1):
+            for j in range(res - 1):
+                A = i * res + j
+                B = i * res + (j + 1)
+                C = (i + 1) * res + j
+                D = (i + 1) * res + (j + 1)
+                
+                faces.append([A, B, C])
+                faces.append([B, D, C])
+                
+        euler_char = 1
         
     else:
         raise ValueError(f"Unknown shape: {shape}")
