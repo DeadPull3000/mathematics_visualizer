@@ -237,6 +237,7 @@ class ManifoldRequest(BaseModel):
     u_max: float = Field(6.28318, description="Maximum value for u")
     v_min: float = Field(0.0, description="Minimum value for v")
     v_max: float = Field(6.28318, description="Maximum value for v")
+    deleted_nodes: list[int] = Field(default_factory=list, description="List of node IDs to excise from the manifold")
 
 class ManifoldResponse(BaseModel):
     """Response containing 3D coordinates and invariants of a manifold mesh."""

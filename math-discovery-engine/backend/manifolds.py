@@ -8,14 +8,23 @@ def compute_cotangent_laplacian(nodes: list[dict], faces: list[list[int]]) -> np
     Computes the cotangent weight Laplacian matrix for a given triangular mesh.
     """
     N = len(nodes)
+    if N == 0:
+        return np.array([])
+        
+    id_to_idx = {n["id"]: idx for idx, n in enumerate(nodes)}
+    
     V = np.zeros((N, 3))
     for node in nodes:
-        V[node["id"]] = [node["fx"], node["fy"], node["fz"]]
+        idx = id_to_idx[node["id"]]
+        V[idx] = [node["fx"], node["fy"], node["fz"]]
 
     W = np.zeros((N, N))
 
     for face in faces:
-        i, j, k = face
+        if not all(v in id_to_idx for v in face):
+            continue
+            
+        i, j, k = [id_to_idx[v] for v in face]
         
         # Edge i-j, opposite k
         u = V[i] - V[k]
@@ -59,7 +68,8 @@ def generate_manifold(
     u_min: float = 0.0,
     u_max: float = 6.28318,
     v_min: float = 0.0,
-    v_max: float = 6.28318
+    v_max: float = 6.28318,
+    deleted_nodes: list[int] = None
 ) -> dict:
     """
     Generate parametric meshes for Topology domain.
@@ -208,31 +218,50 @@ def generate_manifold(
     else:
         raise ValueError(f"Unknown shape: {shape}")
         
-    # Extract unique edges from faces
+    # Surgery: excise deleted nodes
+    if deleted_nodes is None:
+        deleted_nodes = []
+    
+    deleted_set = set(deleted_nodes)
+    
+    active_nodes = [n for n in nodes if n["id"] not in deleted_set]
+    active_faces = [f for f in faces if not any(v in deleted_set for v in f)]
+
+    # Extract unique edges from active faces
     edges_set = set()
-    for face in faces:
+    for face in active_faces:
         for u, v in [(face[0], face[1]), (face[1], face[2]), (face[2], face[0])]:
             if u > v:
                 u, v = v, u
             edges_set.add((u, v))
             
     edges_list = [list(e) for e in edges_set]
-    num_vertices = len(nodes)
+    num_vertices = len(active_nodes)
     num_edges = len(edges_list)
+    num_faces = len(active_faces)
+    
+    # Dynamic Euler Characteristic computation (chi = V - E + F)
+    euler_char = num_vertices - num_edges + num_faces
     
     # Compute Cotangent Laplacian and harmonics
-    L = compute_cotangent_laplacian(nodes, faces)
-    eigenvalues, eigenvectors = la.eigh(L)
+    L = compute_cotangent_laplacian(active_nodes, active_faces)
     
-    # 2nd non-zero eigenvector
-    harmonics_vec = eigenvectors[:, 1]
-    
-    harmonics = {node["id"]: float(val) for node, val in zip(nodes, harmonics_vec)}
+    harmonics = {}
+    if L.size > 0 and len(active_nodes) >= 2:
+        try:
+            eigenvalues, eigenvectors = la.eigh(L)
+            # 2nd non-zero eigenvector
+            harmonics_vec = eigenvectors[:, 1]
+            harmonics = {node["id"]: float(val) for node, val in zip(active_nodes, harmonics_vec)}
+        except Exception:
+            pass
+    elif len(active_nodes) == 1:
+        harmonics = {active_nodes[0]["id"]: 0.0}
     
     return {
-        "nodes": nodes,
+        "nodes": active_nodes,
         "edges": edges_list,
-        "faces": faces,
+        "faces": active_faces,
         "invariants": {
             "vertices": num_vertices,
             "edges": num_edges,
