@@ -166,6 +166,8 @@ export interface ManifoldRequest {
   v_min?: number;
   /** Maximum value of the v parameter. Default: 2π. */
   v_max?: number;
+  /** Node IDs to excise from the manifold mesh (Manifold Surgery). */
+  deleted_nodes?: number[];
 }
 
 /** Topological invariants of the discretised manifold mesh. */
