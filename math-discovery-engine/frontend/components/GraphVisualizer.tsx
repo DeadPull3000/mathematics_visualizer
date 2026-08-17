@@ -86,6 +86,11 @@ export interface GraphVisualizerProps {
    * Parent should re-submit the graph with this edge removed.
    */
   onEdgeRemove?: (source: string | number, target: string | number) => void;
+  /**
+   * Fired when the user clicks a node in manifold mode.
+   * Parent should re-submit the manifold with this node excised.
+   */
+  onNodeRemove?: (nodeId: string | number) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +137,7 @@ function GraphVisualizerInner({
   viewMode = "spectral",
   height = 400,
   onEdgeRemove,
+  onNodeRemove,
 }: GraphVisualizerProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ForceGraph3D = (ForceGraph3DComponent as any);
@@ -344,6 +350,7 @@ function GraphVisualizerInner({
         }
         nodeOpacity={isKnotMode ? (isManifoldMode ? 0.85 : 1) : 0.92}
         onNodeHover={(node: FGNode | null) => setHoveredNode(node)}
+        onNodeClick={(node: FGNode) => { if (onNodeRemove) onNodeRemove(node.id); }}
         // ── Links ──────────────────────────────────────────────────────────────
         linkColor={isManifoldMode
           ? () => "rgba(44, 49, 51, 0.55)"              // manifold: faint Slate Joint wireframe
@@ -366,7 +373,7 @@ function GraphVisualizerInner({
       />
 
       {/* ── Floating tip ─────────────────────────────────────────────────── */}
-      {onEdgeRemove && (
+      {(onEdgeRemove || onNodeRemove) && (
         <div
           style={{
             position: "absolute",
@@ -387,7 +394,9 @@ function GraphVisualizerInner({
         >
           <span style={{ fontSize: 11 }}>💡</span>
           <span style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.03em" }}>
-            Click any edge to cut it · hover a node to reveal ghost edges
+            {onNodeRemove
+              ? "Click any node to puncture the manifold and warp the harmonics"
+              : "Click any edge to cut it · hover a node to reveal ghost edges"}
           </span>
         </div>
       )}
