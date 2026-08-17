@@ -318,6 +318,7 @@ function GraphVisualizerInner({
       }}
     >
       <ForceGraph3D
+        key={`${graphData.nodes.length}-${graphData.links.length}-${viewMode}`}
         ref={fgRef}
         graphData={graphData}
         width={undefined}
