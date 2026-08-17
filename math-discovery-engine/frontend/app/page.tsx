@@ -910,11 +910,13 @@ function ManifoldResultView({
   domain,
   viewMode,
   setViewMode,
+  onNodeRemove,
 }: {
   manifoldResult: ManifoldResponse;
   domain: Domain;
   viewMode: "spectral" | "saliency";
   setViewMode: (m: "spectral" | "saliency") => void;
+  onNodeRemove?: (nodeId: string | number) => void;
 }) {
   const inv = manifoldResult.invariants;
   const rows = [
@@ -1019,6 +1021,7 @@ function ManifoldResultView({
           harmonics={manifoldResult.harmonics}
           viewMode={viewMode}
           height={440}
+          onNodeRemove={onNodeRemove}
         />
       </div>
     </div>
@@ -1192,6 +1195,7 @@ function Microscope({
   viewMode,
   setViewMode,
   onEdgeRemove,
+  onNodeRemove,
   perturbationCount,
   deletedEdges,
 }: {
@@ -1203,6 +1207,7 @@ function Microscope({
   viewMode: "spectral" | "saliency";
   setViewMode: (m: "spectral" | "saliency") => void;
   onEdgeRemove?: (source: string | number, target: string | number) => void;
+  onNodeRemove?: (nodeId: string | number) => void;
   perturbationCount?: number;
   deletedEdges?: (string | number)[][];
 }) {
@@ -1248,7 +1253,7 @@ function Microscope({
           </div>
         ) : isTopooDomain ? (
           manifoldResult ? (
-            <ManifoldResultView manifoldResult={manifoldResult} domain={domain} viewMode={viewMode} setViewMode={setViewMode} />
+            <ManifoldResultView manifoldResult={manifoldResult} domain={domain} viewMode={viewMode} setViewMode={setViewMode} onNodeRemove={onNodeRemove} />
           ) : (
             <EmptyMicroscope domain={domain} />
           )
@@ -1464,6 +1469,8 @@ export default function HomePage() {
   const [perturbationCount, setPerturbationCount] = useState(0);
   // deletedEdges: kept in 3D as ghost strands, removed from maths.
   const [deletedEdges, setDeletedEdges] = useState<(string | number)[][]>([]);
+  // deletedManifoldNodes: node IDs excised from the current manifold mesh.
+  const [deletedManifoldNodes, setDeletedManifoldNodes] = useState<number[]>([]);
   // history: the Laboratory Ledger timeline.
   const [history, setHistory] = useState<{ id: string; type: "genesis" | "cut"; detail: string }[]>([]);
 
@@ -1495,6 +1502,7 @@ export default function HomePage() {
 
     // ── Topology domain (Surfaces & Manifolds) ────────────────────────────────
     if (isTopologyDomain) {
+      setDeletedManifoldNodes([]);
       try {
         const req: ManifoldRequest = {
           shape: manifoldShape,
@@ -1512,6 +1520,7 @@ export default function HomePage() {
         };
         const response = await processManifold(req);
         setManifoldResult(response);
+        setHistory([{ id: Date.now().toString(), type: "genesis", detail: `Origin: ${manifoldShape}` }]);
       } catch (err) {
         let msg: string;
         if (err instanceof ApiError) msg = err.detail;
@@ -1627,6 +1636,56 @@ export default function HomePage() {
       }
     },
     [currentEdges]
+  );
+
+  /**
+   * handleManifoldNodeRemove — called by GraphVisualizer when user clicks a manifold node.
+   * Adds the nodeId to deletedManifoldNodes, records a surgery entry in the Ledger,
+   * and silently re-submits the manifold to the backend for Cotangent Laplacian recomputation.
+   */
+  const handleManifoldNodeRemove = useCallback(
+    async (nodeId: string | number) => {
+      const id = Number(nodeId);
+      if (isNaN(id)) return;
+
+      const nextDeleted = [...deletedManifoldNodes, id];
+      setDeletedManifoldNodes(nextDeleted);
+      setHistory((prev) => [
+        ...prev,
+        { id: Date.now().toString(), type: "cut", detail: `🔪 Surgery: Node ${id} excised` },
+      ]);
+
+      setIsLoading(true);
+      setError(null);
+      try {
+        const req: ManifoldRequest = {
+          shape: manifoldShape,
+          resolution: 15,
+          deformation,
+          deleted_nodes: nextDeleted,
+          ...(manifoldShape === "Custom" && {
+            expr_x: exprX,
+            expr_y: exprY,
+            expr_z: exprZ,
+            u_min: parseFloat(uMin) || 0,
+            u_max: parseFloat(uMax) || 6.283,
+            v_min: parseFloat(vMin) || 0,
+            v_max: parseFloat(vMax) || 6.283,
+          }),
+        };
+        const response = await processManifold(req);
+        setManifoldResult(response);
+      } catch (err) {
+        let msg: string;
+        if (err instanceof ApiError) msg = err.detail;
+        else if (err instanceof Error) msg = err.message;
+        else msg = String(err);
+        setError(msg);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [deletedManifoldNodes, manifoldShape, deformation, exprX, exprY, exprZ, uMin, uMax, vMin, vMax]
   );
 
   return (
@@ -1745,7 +1804,7 @@ export default function HomePage() {
 
             {/* Structure Microscope */}
             <section style={{ flexShrink: 0, minHeight: 400 }}>
-              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain ? undefined : handleEdgeRemove} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
+              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain ? undefined : handleEdgeRemove} onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
             </section>
           </main>
 
