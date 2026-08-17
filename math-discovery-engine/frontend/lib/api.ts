@@ -141,8 +141,8 @@ export interface KnotResponse {
 
 /** Request body for POST /api/process-manifold */
 export interface ManifoldRequest {
-  /** Manifold shape identifier, e.g. "Sphere" or "Torus". */
-  shape: "Sphere" | "Torus";
+  /** Manifold shape identifier: "Sphere", "Torus", or "Custom". */
+  shape: "Sphere" | "Torus" | "Custom";
   /** Resolution of the parametric grid (number of divisions per axis). */
   resolution?: number;
   /**
@@ -152,6 +152,20 @@ export interface ManifoldRequest {
    * "ripple"  — high-frequency sine interference pattern
    */
   deformation?: "none" | "stretch" | "ripple";
+  /** Custom parametric equation for X(u, v). Required when shape is "Custom". */
+  expr_x?: string;
+  /** Custom parametric equation for Y(u, v). Required when shape is "Custom". */
+  expr_y?: string;
+  /** Custom parametric equation for Z(u, v). Required when shape is "Custom". */
+  expr_z?: string;
+  /** Minimum value of the u parameter. Default: 0. */
+  u_min?: number;
+  /** Maximum value of the u parameter. Default: 2π. */
+  u_max?: number;
+  /** Minimum value of the v parameter. Default: 0. */
+  v_min?: number;
+  /** Maximum value of the v parameter. Default: 2π. */
+  v_max?: number;
 }
 
 /** Topological invariants of the discretised manifold mesh. */
