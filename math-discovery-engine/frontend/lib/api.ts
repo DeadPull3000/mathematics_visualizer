@@ -440,3 +440,56 @@ export async function processManifold(request: ManifoldRequest): Promise<Manifol
     body: JSON.stringify(request),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Complexity Theory — Boolean Circuit
+// ---------------------------------------------------------------------------
+
+/** Request body for POST /api/process-circuit */
+export interface CircuitRequest {
+  /** Boolean logic formula, e.g. "(x1 & x2) | (~x3 & x4)". */
+  formula: string;
+}
+
+/** Single gate/variable node in the circuit DAG. */
+export interface CircuitNode {
+  /** Unique string ID (variable name for VAR nodes, uuid for gates). */
+  id: string;
+  /** Gate type: "VAR", "AND", "OR", "NOT", or "XOR". */
+  gate_type: "VAR" | "AND" | "OR" | "NOT" | "XOR";
+}
+
+/** Response from POST /api/process-circuit */
+export interface CircuitResponse {
+  /** All gate and variable nodes in the DAG. */
+  nodes: CircuitNode[];
+  /** Directed edges [source, target] — data flows from inputs to output. */
+  edges: [string, string][];
+  /** Circuit complexity invariants. */
+  invariants: {
+    /** Longest path length = circuit depth = time complexity. */
+    depth: number;
+    /** Number of logic gates (AND, OR, NOT, XOR). */
+    num_gates: number;
+    /** Number of input variables (VAR nodes). */
+    num_vars: number;
+  };
+  /** Saliency map: 1.0 for nodes on the critical path, 0.2 otherwise. */
+  saliency_scores: Record<string, number>;
+}
+
+/**
+ * Send a boolean circuit formula to the backend and receive the DAG
+ * representation with depth and critical path saliency.
+ *
+ * @param request  A CircuitRequest with a formula like "(x1 & x2) | ~x3".
+ *
+ * @example
+ * const circuit = await processCircuit({ formula: "(x1 & x2) | (~x3 & x4)" });
+ */
+export async function processCircuit(request: CircuitRequest): Promise<CircuitResponse> {
+  return apiFetch<CircuitResponse>("/api/process-circuit", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
