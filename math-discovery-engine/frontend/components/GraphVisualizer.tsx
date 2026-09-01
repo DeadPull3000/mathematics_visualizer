@@ -91,6 +91,16 @@ export interface GraphVisualizerProps {
    * Parent should re-submit the manifold with this node excised.
    */
   onNodeRemove?: (nodeId: string | number) => void;
+  /**
+   * Active domain identifier. "circuit" enables DAG top-down layout and
+   * directed arrows. Other values (or undefined) use the default physics layout.
+   */
+  domain?: string;
+  /**
+   * Gate type map for circuit mode — maps node ID → gate type string.
+   * Used for Gate Types (spectral) colouring when domain === "circuit".
+   */
+  gateTypes?: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -138,10 +148,13 @@ function GraphVisualizerInner({
   height = 400,
   onEdgeRemove,
   onNodeRemove,
+  domain,
+  gateTypes = {},
 }: GraphVisualizerProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ForceGraph3D = (ForceGraph3DComponent as any);
 
+  const isCircuitMode = domain === "circuit";
   // Is the visualiser rendering a parametric knot / manifold (fixed coords)?
   const isKnotMode = knotNodes !== undefined && knotNodes.length > 0;
   // Manifold mode: knotNodes supplied AND faces supplied — wireframe mesh aesthetic.
@@ -204,28 +217,51 @@ function GraphVisualizerInner({
       return { nodes: knotNodeObjs, links: knotLinks };
     }
 
-    // ── Standard graph mode ─────────────────────────────────────────────────
+    // ── Standard graph / circuit mode ───────────────────────────────────────
     const nodeObjs: FGNode[] = nodes.map((rawId) => {
       const key = String(rawId);
 
-      // Spectral colouring
-      const fv = fiedlerVector[key];
-      let spectralColor: string;
-      if (fv === undefined || fv === null || Math.abs(fv) < 1e-10) spectralColor = COLORS.neutral;
-      else if (fv > 0) spectralColor = COLORS.partA;
-      else spectralColor = COLORS.partB;
-
-      // Saliency colouring
+      let color: string;
+      let label: string;
       const score = saliencyScores[key] ?? 0;
-      let saliencyColor: string;
-      if (score > 0.6) saliencyColor = COLORS.partA;
-      else if (score > 0.3) saliencyColor = COLORS.neutral;
-      else saliencyColor = COLORS.low;
 
-      const color = viewMode === "saliency" ? saliencyColor : spectralColor;
-      const saliencyLabel = viewMode === "saliency" ? ` | saliency: ${score.toFixed(3)}` : "";
+      if (isCircuitMode) {
+        const gateType = gateTypes[key] ?? "VAR";
+        if (viewMode === "saliency") {
+          // Critical Path colouring: 1.0 = Terracotta, 0.2 = dark Chalkboard
+          color = score >= 0.9 ? COLORS.partA : "#1C1F21";
+        } else {
+          // Gate Types colouring
+          const gateColors: Record<string, string> = {
+            VAR: "#E6E4DF",   // Alabaster — input variable
+            AND: "#D19E4A",   // Ochre
+            OR:  "#6B8075",   // Sage
+            NOT: "#888C8E",   // Lead
+            XOR: "#888C8E",   // Lead (same as NOT)
+          };
+          color = gateColors[gateType] ?? COLORS.neutral;
+        }
+        label = gateType === "VAR" ? `${key} (input)` : `${key} · ${gateType}`;
+      } else {
+        // Spectral colouring (Fiedler vector partitioning)
+        const fv = fiedlerVector[key];
+        let spectralColor: string;
+        if (fv === undefined || fv === null || Math.abs(fv) < 1e-10) spectralColor = COLORS.neutral;
+        else if (fv > 0) spectralColor = COLORS.partA;
+        else spectralColor = COLORS.partB;
 
-      return { id: key, color, label: `Node ${key}${saliencyLabel}`, saliency: score };
+        // Saliency colouring
+        let saliencyColor: string;
+        if (score > 0.6) saliencyColor = COLORS.partA;
+        else if (score > 0.3) saliencyColor = COLORS.neutral;
+        else saliencyColor = COLORS.low;
+
+        color = viewMode === "saliency" ? saliencyColor : spectralColor;
+        const saliencyLabel = viewMode === "saliency" ? ` | saliency: ${score.toFixed(3)}` : "";
+        label = `Node ${key}${saliencyLabel}`;
+      }
+
+      return { id: key, color, label, saliency: score };
     });
 
     // Active edges
@@ -243,7 +279,7 @@ function GraphVisualizerInner({
     }));
 
     return { nodes: nodeObjs, links: [...activeLinks, ...ghostLinks] };
-  }, [isKnotMode, knotNodes, nodes, edges, deletedEdges, fiedlerVector, saliencyScores, viewMode]);
+  }, [isKnotMode, isCircuitMode, knotNodes, nodes, edges, deletedEdges, fiedlerVector, saliencyScores, gateTypes, viewMode, harmonics]);
 
   // ── Zero-out ghost link force after graphData changes ───────────────────
   useEffect(() => {
@@ -330,22 +366,29 @@ function GraphVisualizerInner({
         width={undefined}
         height={height}
         backgroundColor={COLORS.bg}
+        // ── DAG layout (circuit mode only) ─────────────────────────────────
+        dagMode={isCircuitMode ? "td" : undefined}
+        dagLevelDistance={isCircuitMode ? 40 : undefined}
         // ── Nodes ──────────────────────────────────────────────────────────
         nodeId="id"
         nodeColor={(n: FGNode) => n.color}
         nodeLabel={(n: FGNode) => n.label}
         nodeRelSize={
-          isManifoldMode
+          isCircuitMode
+            ? 5                                                       // circuit: uniform base size
+            : isManifoldMode
             ? 2                                                       // manifold: tiny uniform spheres
             : isKnotMode
             ? (viewMode === "saliency" && !harmonics ? undefined : 3) // knot: fixed size or entanglement-scaled
             : (viewMode === "saliency" ? undefined : 5)               // graph: fixed or saliency-scaled
         }
         nodeVal={
-          isKnotMode && viewMode === "saliency" && !harmonics
-            ? (n: FGNode) => 2 + n.saliency * 5          // knot: 2–7 by entanglement
-            : (!isKnotMode && viewMode === "saliency")
-            ? (n: FGNode) => 3 + n.saliency * 8          // graph: 3–11 by GCN saliency
+          isCircuitMode && viewMode === "saliency"
+            ? (n: FGNode) => (n.saliency >= 0.9 ? 8 : 3)            // circuit: critical=8, off=3
+            : isKnotMode && viewMode === "saliency" && !harmonics
+            ? (n: FGNode) => 2 + n.saliency * 5                      // knot: 2–7 by entanglement
+            : (!isKnotMode && !isCircuitMode && viewMode === "saliency")
+            ? (n: FGNode) => 3 + n.saliency * 8                      // graph: 3–11 by GCN saliency
             : undefined
         }
         nodeOpacity={isKnotMode ? (isManifoldMode ? 0.85 : 1) : 0.92}
@@ -364,11 +407,13 @@ function GraphVisualizerInner({
         linkDashGap={isKnotMode ? undefined : ((link: FGLink) => (link.isDeleted ? 3 : undefined))}
         linkVisibility={isKnotMode ? true : getLinkVisibility}
         linkHoverPrecision={onEdgeRemove ? 6 : 2}
+        linkDirectionalArrowLength={isCircuitMode ? 3.5 : 0}
+        linkDirectionalArrowRelPos={1}
         onLinkHover={isKnotMode ? undefined : handleLinkHover}
         onLinkClick={isKnotMode ? undefined : handleLinkClick}
         // ── Performance ────────────────────────────────────────────────────
-        warmupTicks={isKnotMode ? 0 : 60}
-        cooldownTime={isKnotMode ? 0 : 3000}
+        warmupTicks={isKnotMode || isCircuitMode ? 0 : 60}
+        cooldownTime={isKnotMode || isCircuitMode ? 0 : 3000}
         showNavInfo={false}
       />
 
