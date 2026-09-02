@@ -557,3 +557,53 @@ export async function processAlgebraic(request: AlgebraicRequest): Promise<Algeb
     body: JSON.stringify(request),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Batch Dataset Explorer
+// ---------------------------------------------------------------------------
+
+/** Request body for POST /api/process-batch */
+export interface BatchRequest {
+  /**
+   * Number of random Erdős-Rényi graphs to generate.
+   * @default 100
+   */
+  num_samples?: number;
+}
+
+/** Single data point returned by the batch generator. */
+export interface BatchDataPoint {
+  /** Sequential index of this sample. */
+  id: number;
+  /** Number of vertices. */
+  vertices: number;
+  /** Number of edges. */
+  edges: number;
+  /** Graph density ∈ [0, 1]. */
+  density: number;
+  /** Second-smallest Laplacian eigenvalue. 0 ⇒ disconnected. */
+  algebraic_connectivity: number;
+  /** Betti-0 = number of connected components. */
+  betti_0: number;
+}
+
+/** Response from POST /api/process-batch */
+export interface BatchResponse {
+  /** Array of graph invariant records. */
+  data: BatchDataPoint[];
+}
+
+/**
+ * Generate a batch of random graphs with computed invariants.
+ *
+ * @param request  A BatchRequest, optionally specifying num_samples.
+ *
+ * @example
+ * const batch = await processBatch({ num_samples: 200 });
+ */
+export async function processBatch(request: BatchRequest): Promise<BatchResponse> {
+  return apiFetch<BatchResponse>("/api/process-batch", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}

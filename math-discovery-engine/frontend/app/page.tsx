@@ -32,6 +32,7 @@ import {
   processManifold,
   processCircuit,
   processAlgebraic,
+  processBatch,
   exportToPython,
   type InputType,
   type MathRequest,
@@ -44,9 +45,11 @@ import {
   type CircuitResponse,
   type AlgebraicRequest,
   type AlgebraicResponse,
+  type BatchDataPoint,
   ApiError,
 } from "@/lib/api";
 import GraphVisualizer from "@/components/GraphVisualizer";
+import BatchVisualizer from "@/components/BatchVisualizer";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -114,6 +117,15 @@ const DOMAINS: Domain[] = [
     defaultRawData: "x**2 + y**2 - z**2",
     color: "#D19E4A",
   },
+  {
+    id: "batch-explorer",
+    label: "Batch Explorer",
+    subtitle: "Statistical Trends",
+    icon: "⋯",
+    defaultInputType: "formula",
+    defaultRawData: "",
+    color: "#6B8075",
+  },
 ];
 
 function Sidebar({
@@ -149,7 +161,7 @@ function Sidebar({
 
       {DOMAINS.map((d) => {
         const isActive = d.id === selected.id;
-        const isLive = d.id === "combinatorics" || d.id === "knot" || d.id === "topology" || d.id === "circuit" || d.id === "algebraic-geometry";
+        const isLive = d.id === "combinatorics" || d.id === "knot" || d.id === "topology" || d.id === "circuit" || d.id === "algebraic-geometry" || d.id === "batch-explorer";
         return (
           <button
             key={d.id}
@@ -1595,6 +1607,7 @@ function Microscope({
   manifoldResult,
   circuitResult,
   algebraicResult,
+  batchData,
   domain,
   error,
   viewMode,
@@ -1609,6 +1622,7 @@ function Microscope({
   manifoldResult: ManifoldResponse | null;
   circuitResult: CircuitResponse | null;
   algebraicResult: AlgebraicResponse | null;
+  batchData: BatchDataPoint[] | null;
   domain: Domain;
   error: string | null;
   viewMode: "spectral" | "saliency";
@@ -1622,15 +1636,18 @@ function Microscope({
   const isTopooDomain = domain.id === "topology";
   const isCircuitDomain = domain.id === "circuit";
   const isAlgebraicDomain = domain.id === "algebraic-geometry";
-  const hasResult = !!(result || knotResult || manifoldResult || circuitResult || algebraicResult);
+  const isBatchDomain = domain.id === "batch-explorer";
+  const hasResult = !!(result || knotResult || manifoldResult || circuitResult || algebraicResult || batchData);
   return (
     <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 400 }}>
       <div style={{ padding: "12px 18px", borderBottom: "1px solid #2C3133", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ color: domain.color, fontSize: 14 }}>◉</span>
-          <span style={{ color: "#E6E4DF", fontSize: 12, fontWeight: 600, letterSpacing: "0.06em" }}>STRUCTURE MICROSCOPE</span>
+          <span style={{ color: "#E6E4DF", fontSize: 12, fontWeight: 600, letterSpacing: "0.06em" }}>
+            {isBatchDomain ? "BATCH ANALYSIS" : "STRUCTURE MICROSCOPE"}
+          </span>
         </div>
-        {result && !isKnotDomain && !isTopooDomain && !isCircuitDomain && !isAlgebraicDomain && (
+        {result && !isKnotDomain && !isTopooDomain && !isCircuitDomain && !isAlgebraicDomain && !isBatchDomain && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ background: "#6B807520", border: "1px solid #6B8075", color: "#6B8075", borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
               {result.metadata.num_nodes}V · {result.metadata.num_edges}E
@@ -1663,6 +1680,11 @@ function Microscope({
             {algebraicResult.invariants.num_vertices.toLocaleString()}V · {algebraicResult.invariants.num_faces.toLocaleString()}F
           </span>
         )}
+        {batchData && isBatchDomain && (
+          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
+            Samples: {batchData.length}
+          </span>
+        )}
       </div>
       <div style={{ flex: 1, display: "flex", alignItems: error || !hasResult ? "center" : "flex-start", justifyContent: error || !hasResult ? "center" : "flex-start", padding: 24, overflowY: "auto" }}>
         {error ? (
@@ -1692,6 +1714,12 @@ function Microscope({
         ) : isAlgebraicDomain ? (
           algebraicResult ? (
             <AlgebraicResultView algebraicResult={algebraicResult} domain={domain} viewMode={viewMode} setViewMode={setViewMode} />
+          ) : (
+            <EmptyMicroscope domain={domain} />
+          )
+        ) : isBatchDomain ? (
+          batchData ? (
+            <BatchVisualizer data={batchData} />
           ) : (
             <EmptyMicroscope domain={domain} />
           )
@@ -1909,11 +1937,15 @@ export default function HomePage() {
   const [deletedManifoldNodes, setDeletedManifoldNodes] = useState<number[]>([]);
   // history: the Laboratory Ledger timeline.
   const [history, setHistory] = useState<{ id: string; type: "genesis" | "cut"; detail: string }[]>([]);
+  // batchData: results from the Batch Dataset Explorer.
+  const [batchData, setBatchData] = useState<BatchDataPoint[] | null>(null);
+  const [batchSamples, setBatchSamples] = useState(100);
 
   const isKnotDomain = selectedDomain.id === "knot";
   const isTopologyDomain = selectedDomain.id === "topology";
   const isCircuitDomain = selectedDomain.id === "circuit";
   const isAlgebraicDomain = selectedDomain.id === "algebraic-geometry";
+  const isBatchDomain = selectedDomain.id === "batch-explorer";
 
   // Clear results when switching domain
   const handleDomainSelect = useCallback((d: Domain) => {
@@ -1923,6 +1955,7 @@ export default function HomePage() {
     setManifoldResult(null);
     setCircuitResult(null);
     setAlgebraicResult(null);
+    setBatchData(null);
     setError(null);
     setHistory([]);
     setDeletedEdges([]);
@@ -1930,7 +1963,7 @@ export default function HomePage() {
     setPerturbationCount(0);
   }, []);
 
-  useEffect(() => { setResult(null); setKnotResult(null); setManifoldResult(null); setCircuitResult(null); setAlgebraicResult(null); setError(null); }, [selectedDomain]);
+  useEffect(() => { setResult(null); setKnotResult(null); setManifoldResult(null); setCircuitResult(null); setAlgebraicResult(null); setBatchData(null); setError(null); }, [selectedDomain]);
 
   const handleFileLoad = useCallback((raw: string) => {
     setFileContent(raw);
@@ -2069,7 +2102,23 @@ export default function HomePage() {
       }
       setError(msg);
     } finally { setIsLoading(false); }
-  }, [isTopologyDomain, manifoldShape, deformation, exprX, exprY, exprZ, uMin, uMax, vMin, vMax, isKnotDomain, knotFormula, isCircuitDomain, circuitFormula, isAlgebraicDomain, algebraicFormula, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
+  }, [isTopologyDomain, manifoldShape, deformation, exprX, exprY, exprZ, uMin, uMax, vMin, vMax, isKnotDomain, knotFormula, isCircuitDomain, circuitFormula, isAlgebraicDomain, algebraicFormula, isBatchDomain, batchSamples, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
+
+  /** handleBatchGenerate — called by the Batch Explorer "generate" button. */
+  const handleBatchGenerate = useCallback(async (n: number) => {
+    setIsLoading(true); setError(null); setBatchData(null);
+    try {
+      const response = await processBatch({ num_samples: n });
+      setBatchData(response.data);
+      setHistory([{ id: Date.now().toString(), type: "genesis", detail: `Batch: ${n} random graphs` }]);
+    } catch (err) {
+      let msg: string;
+      if (err instanceof ApiError) msg = err.detail;
+      else if (err instanceof Error) msg = err.message;
+      else msg = String(err);
+      setError(msg);
+    } finally { setIsLoading(false); }
+  }, []);
 
   /**
    * handleEdgeRemove — called by GraphVisualizer when the user clicks an edge.
@@ -2222,10 +2271,10 @@ export default function HomePage() {
             <section style={{ flexShrink: 0, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: 280 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                  {isTopologyDomain ? "◎ Manifold Shape" : isKnotDomain ? "∞ Knot Formula" : isCircuitDomain ? "⊕ Boolean Circuit" : isAlgebraicDomain ? "∿ Implicit Polynomial" : "⬆ Input / Data Source"}
+                  {isTopologyDomain ? "◎ Manifold Shape" : isKnotDomain ? "∞ Knot Formula" : isCircuitDomain ? "⊕ Boolean Circuit" : isAlgebraicDomain ? "∿ Implicit Polynomial" : isBatchDomain ? "⋯ Batch Configuration" : "⬆ Input / Data Source"}
                 </span>
                 <span style={{ color: "#888C8E", fontSize: 10 }}>
-                  {isTopologyDomain ? "Parametric mesh · Laplacian harmonics" : isKnotDomain ? "Torus knot parametric engine" : isCircuitDomain ? "AST parser · DAG · Critical path" : isAlgebraicDomain ? "Marching Cubes · Singularity scores" : "All parsing is performed server-side"}
+                  {isTopologyDomain ? "Parametric mesh · Laplacian harmonics" : isKnotDomain ? "Torus knot parametric engine" : isCircuitDomain ? "AST parser · DAG · Critical path" : isAlgebraicDomain ? "Marching Cubes · Singularity scores" : isBatchDomain ? "Erdős-Rényi · G(N, p) random ensemble" : "All parsing is performed server-side"}
                 </span>
               </div>
               {isTopologyDomain ? (
@@ -2261,6 +2310,57 @@ export default function HomePage() {
                   algebraicFormula={algebraicFormula}
                   setAlgebraicFormula={setAlgebraicFormula}
                 />
+              ) : isBatchDomain ? (
+                /* Batch Explorer configuration panel */
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div style={{ color: "#888C8E", fontSize: 11, lineHeight: 1.7 }}>
+                    Generates a random ensemble of Erdős-Rényi graphs G(N,&nbsp;p) with
+                    N&nbsp;∈&nbsp;[5,&nbsp;30] and p&nbsp;∈&nbsp;[0.05,&nbsp;0.95],
+                    then computes their topological invariants for scatter analysis.
+                  </div>
+                  {/* Sample count selector */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                      <span style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.06em", fontWeight: 600, textTransform: "uppercase" }}>Sample Count</span>
+                      <span style={{ color: selectedDomain.color, fontFamily: "'Courier New', monospace", fontSize: 14, fontWeight: 700 }}>{batchSamples}</span>
+                    </div>
+                    <input
+                      type="range" min={20} max={500} step={10}
+                      value={batchSamples}
+                      onChange={(e) => setBatchSamples(Number(e.target.value))}
+                      style={{ width: "100%", accentColor: selectedDomain.color }}
+                    />
+                    <div style={{ display: "flex", justifyContent: "space-between", color: "#3A3F42", fontSize: 9 }}>
+                      <span>20</span><span>500</span>
+                    </div>
+                  </div>
+                  {/* Quick presets */}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {[50, 100, 200, 500].map((n) => (
+                      <button key={n} onClick={() => setBatchSamples(n)}
+                        style={{
+                          flex: 1, background: batchSamples === n ? `${selectedDomain.color}30` : "#111315",
+                          border: `1px solid ${batchSamples === n ? selectedDomain.color : "#2C3133"}`,
+                          borderRadius: 7, padding: "6px 0",
+                          color: batchSamples === n ? selectedDomain.color : "#888C8E",
+                          cursor: "pointer", fontSize: 11, fontWeight: 600,
+                          transition: "all 0.15s ease",
+                        }}
+                      >{n}</button>
+                    ))}
+                  </div>
+                  {/* Invariant legend */}
+                  <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 8, padding: "10px 14px", fontSize: 10, lineHeight: 1.9, color: "#555A5D" }}>
+                    <span style={{ color: "#888C8E", fontWeight: 600 }}>Scatter axes</span>
+                    {"  "}
+                    X: <code style={{ color: "#E6E4DF" }}>density  ρ</code>
+                    {"  ·  "}
+                    Y: <code style={{ color: "#E6E4DF" }}>algebraic connectivity  λ₂</code>
+                    <br />
+                    <span style={{ color: "#C05640" }}>●</span> Connected (β₀=1){"  "}
+                    <span style={{ color: "#6B8075" }}>●</span> Disconnected (β₀&gt;1)
+                  </div>
+                </div>
               ) : (
                 <Dropzone
                   domain={selectedDomain}
@@ -2273,10 +2373,10 @@ export default function HomePage() {
               )}
             </section>
 
-            {/* Discover Structure button */}
+            {/* Discover / Generate button */}
             <button
               id="discover-btn"
-              onClick={handleDiscover}
+              onClick={isBatchDomain ? () => handleBatchGenerate(batchSamples) : handleDiscover}
               disabled={isLoading}
               style={{
                 background: isLoading ? "#2C3133" : `linear-gradient(135deg, ${selectedDomain.color}, ${selectedDomain.color}cc)`,
@@ -2292,15 +2392,15 @@ export default function HomePage() {
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
             >
               {isLoading ? (
-                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isTopologyDomain ? "Generating Mesh…" : isKnotDomain ? "Generating Knot…" : isCircuitDomain ? "Parsing Circuit…" : isAlgebraicDomain ? "Tracing Variety…" : "Computing Invariants…"}</>
+                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isTopologyDomain ? "Generating Mesh…" : isKnotDomain ? "Generating Knot…" : isCircuitDomain ? "Parsing Circuit…" : isAlgebraicDomain ? "Tracing Variety…" : isBatchDomain ? `Sampling ${batchSamples} Graphs…` : "Computing Invariants…"}</>
               ) : (
-                <><span>{isTopologyDomain ? "◎" : isKnotDomain ? "∞" : isCircuitDomain ? "⊕" : isAlgebraicDomain ? "∿" : "⚗"}</span> {isTopologyDomain ? "Generate Manifold" : isKnotDomain ? "Generate Knot" : isCircuitDomain ? "Analyse Circuit" : isAlgebraicDomain ? "Extract Variety" : "Discover Structure"}</>
+                <><span>{isTopologyDomain ? "◎" : isKnotDomain ? "∞" : isCircuitDomain ? "⊕" : isAlgebraicDomain ? "∿" : isBatchDomain ? "⋯" : "⚗"}</span> {isTopologyDomain ? "Generate Manifold" : isKnotDomain ? "Generate Knot" : isCircuitDomain ? "Analyse Circuit" : isAlgebraicDomain ? "Extract Variety" : isBatchDomain ? `Generate ${batchSamples} Random Graphs` : "Discover Structure"}</>
               )}
             </button>
 
             {/* Structure Microscope */}
             <section style={{ flexShrink: 0, minHeight: 400 }}>
-              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} circuitResult={circuitResult} algebraicResult={algebraicResult} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain || isCircuitDomain || isAlgebraicDomain ? undefined : handleEdgeRemove} onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
+              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} circuitResult={circuitResult} algebraicResult={algebraicResult} batchData={batchData} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain || isCircuitDomain || isAlgebraicDomain || isBatchDomain ? undefined : handleEdgeRemove} onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
             </section>
           </main>
 
