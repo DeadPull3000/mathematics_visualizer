@@ -246,6 +246,201 @@ class ManifoldResponse(BaseModel):
     faces: list[list[int]] = Field(..., description="List of [node_i, node_j, node_k] triangular faces")
     invariants: dict = Field(..., description="Manifold invariants (vertices, edges, euler_characteristic)")
     harmonics: dict[Union[int, str], float] = Field(..., description="2nd non-zero eigenvector of the Combinatorial Laplacian")
+    """
+
+    input_type: InputType = Field(
+        ...,
+        description="Parsing strategy: 'edge_list' | 'formula' | 'json'",
+        examples=["edge_list"],
+    )
+    raw_data: str = Field(
+        ...,
+        min_length=1,
+        description="Raw string representation of the mathematical object",
+        examples=["0 1\n1 2\n2 3\n3 0"],
+    )
+
+    @field_validator("raw_data")
+    @classmethod
+    def raw_data_not_blank(cls, v: str) -> str:
+        """Reject whitespace-only strings that would trip the parsers."""
+        if not v.strip():
+            raise ValueError(
+                "raw_data must not be blank or whitespace-only. "
+                "Please enter a valid edge list, formula, or JSON object."
+            )
+        return v
+
+
+# --- Graph metadata / invariants ----------------------------------------------
+
+
+class GraphMetadata(BaseModel):
+    """
+    Fundamental topological invariants derived from the parsed NetworkX graph.
+
+    This is the 1-skeleton metadata -- the foundational data layer upon
+    which future Simplicial Complex and Persistent Laplacian computations
+    will be built in subsequent steps.
+
+    Mathematical notes
+    ------------------
+    - density  = 2|E| / (|V| * (|V| - 1))  for a simple undirected graph.
+      For |V| <= 1 the density is defined as 0.
+    - is_connected is True iff there is a path between every pair of
+      vertices (equivalently, the 0th Betti number beta_0 = 1).
+    - num_connected_components equals beta_0, the 0th Betti number.
+    - is_planar is computed via the Boyer-Myrvold planarity test
+      (O(|V|) time) and is set to None for very large graphs.
+    """
+
+    num_nodes: int = Field(
+        ...,
+        ge=0,
+        description="Cardinality of the vertex set |V|.",
+    )
+    num_edges: int = Field(
+        ...,
+        ge=0,
+        description="Cardinality of the edge set |E|.",
+    )
+    density: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Graph density: 2|E| / (|V|(|V|-1)) in [0, 1]. "
+            "0 = empty graph, 1 = complete graph."
+        ),
+    )
+    is_connected: bool = Field(
+        ...,
+        description=(
+            "True if every vertex is reachable from every other vertex "
+            "via a path (i.e., beta_0 = 1)."
+        ),
+    )
+    num_connected_components: int = Field(
+        ...,
+        ge=1,
+        description=(
+            "beta_0: the 0th Betti number -- number of path-connected "
+            "components of the graph."
+        ),
+    )
+    is_planar: Union[bool, None] = Field(
+        default=None,
+        description=(
+            "True if the graph is planar (Boyer-Myrvold test). "
+            "None if the test is skipped for graphs with > 1,000 edges."
+        ),
+    )
+
+
+# --- Response -----------------------------------------------------------------
+
+
+class TopologyMetadata(BaseModel):
+    """
+    Spectral and topological features computed from the graph's Laplacian.
+    """
+    laplacian_eigenvalues: list[float] = Field(
+        ...,
+        description="Sorted eigenvalues of the Laplacian matrix.",
+    )
+    fiedler_vector: dict[Union[int, str], float] = Field(
+        ...,
+        description="Fiedler vector mapping node ID to its float value.",
+    )
+    algebraic_connectivity: float = Field(
+        ...,
+        description="Second smallest eigenvalue of the Laplacian (algebraic connectivity).",
+    )
+    betti_numbers: list[int] = Field(
+        ...,
+        description="Betti numbers (beta_0, beta_1, beta_2) of the Simplicial Clique Complex.",
+    )
+    saliency_scores: dict[Union[int, str], float] = Field(
+        ...,
+        description="Structural saliency scores mapping node ID to a float between 0.0 and 1.0.",
+    )
+
+
+class MathResponse(BaseModel):
+    """
+    Standardised response returned to the frontend after parsing and
+    computing graph invariants.
+
+    The nodes and edges fields carry the 1-skeleton of the underlying
+    simplicial complex in a format that frontend visualisation libraries
+    (D3.js, Three.js, Cytoscape) can consume directly.
+
+    Fields
+    ------
+    nodes : list[int | str]
+        Sorted list of node identifiers from the parsed graph.
+
+    edges : list[list[int | str]]
+        List of [source, target] pairs.
+
+    metadata : GraphMetadata
+        The computed topological invariants of the 1-skeleton.
+        
+    topology : TopologyMetadata
+        Spectral graph theory metrics (Laplacian eigenvalues, Fiedler vector).
+    """
+
+    nodes: list[Union[int, str]] = Field(
+        ...,
+        description="Sorted list of node identifiers (int or str).",
+    )
+    edges: list[list[Union[int, str]]] = Field(
+        ...,
+        description="Edge list as [[source, target], ...] pairs.",
+    )
+    metadata: GraphMetadata = Field(
+        ...,
+        description="Computed topological invariants of the graph.",
+    )
+    topology: TopologyMetadata = Field(
+        ...,
+        description="Spectral topological features (Laplacian).",
+    )
+
+
+class KnotRequest(BaseModel):
+    """Payload for Knot Theory computations."""
+    formula: str = Field(..., description="Knot formula, e.g., T_3_2")
+
+
+class KnotResponse(BaseModel):
+    """Response containing 3D coordinates and topological invariants of a knot."""
+    nodes: list[dict] = Field(..., description="List of nodes with id, fx, fy, fz")
+    edges: list[list[int]] = Field(..., description="List of [source, target] edge pairs")
+    invariants: dict = Field(..., description="Knot invariants (crossing_number, p, q, type, writhe)")
+    saliency_scores: dict[Union[int, str], float] = Field(..., description="Local entanglement saliency scores mapping node ID to [0.0, 1.0].")
+
+class ManifoldRequest(BaseModel):
+    """Payload for Manifold computations."""
+    shape: str = Field(..., description="Manifold shape, e.g., 'Sphere', 'Torus', or 'Custom'")
+    resolution: int = Field(15, description="Resolution of the parametric grid")
+    deformation: str = Field("none", description="Deformation type: 'none', 'stretch', or 'ripple'")
+    expr_x: str = Field("", description="Custom parametric equation for X(u, v)")
+    expr_y: str = Field("", description="Custom parametric equation for Y(u, v)")
+    expr_z: str = Field("", description="Custom parametric equation for Z(u, v)")
+    u_min: float = Field(0.0, description="Minimum value for u")
+    u_max: float = Field(6.28318, description="Maximum value for u")
+    v_min: float = Field(0.0, description="Minimum value for v")
+    v_max: float = Field(6.28318, description="Maximum value for v")
+    deleted_nodes: list[int] = Field(default_factory=list, description="List of node IDs to excise from the manifold")
+
+class ManifoldResponse(BaseModel):
+    """Response containing 3D coordinates and invariants of a manifold mesh."""
+    nodes: list[dict] = Field(..., description="List of nodes with id, fx, fy, fz")
+    edges: list[list[Union[int, str]]] = Field(..., description="List of [source, target] edge pairs")
+    faces: list[list[int]] = Field(..., description="List of [node_i, node_j, node_k] triangular faces")
+    invariants: dict = Field(..., description="Manifold invariants (vertices, edges, euler_characteristic)")
+    harmonics: dict[Union[int, str], float] = Field(..., description="2nd non-zero eigenvector of the Combinatorial Laplacian")
 
 class CircuitRequest(BaseModel):
     """Payload for Complexity Theory boolean circuit computations."""
@@ -257,3 +452,17 @@ class CircuitResponse(BaseModel):
     edges: list[list[str]] = Field(..., description="List of [source, target] directed edges")
     invariants: dict = Field(..., description="Circuit invariants (depth, num_gates, num_vars)")
     saliency_scores: dict[str, float] = Field(..., description="Saliency mapping (1.0 on critical path, 0.2 otherwise)")
+
+class AlgebraicRequest(BaseModel):
+    """Payload for Algebraic Geometry computations."""
+    formula: str = Field(..., description="Implicit polynomial equation F(x, y, z) = 0")
+    resolution: int = Field(30, description="Grid resolution for marching cubes")
+    bounds: float = Field(3.0, description="Spatial bounds for x, y, z [-bounds, bounds]")
+
+class AlgebraicResponse(BaseModel):
+    """Response containing extracted isosurface of an algebraic variety."""
+    nodes: list[dict] = Field(..., description="List of nodes with id, fx, fy, fz")
+    faces: list[list[int]] = Field(..., description="List of [node_i, node_j, node_k] triangular faces")
+    edges: list[list[int]] = Field(..., description="List of [source, target] edge pairs")
+    invariants: dict = Field(..., description="Invariants (num_vertices, num_faces)")
+    saliency_scores: dict[int, float] = Field(..., description="Singularity Score mapping node ID to [0.0, 1.0]")

@@ -24,13 +24,14 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
-from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse, CircuitRequest, CircuitResponse
+from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse, CircuitRequest, CircuitResponse, AlgebraicRequest, AlgebraicResponse
 from parsers import parse_edge_list, parse_formula, parse_json
 from topology import compute_spectral_topology, compute_betti_numbers
 from ml_engine import compute_gradient_saliency
 from knot_theory import generate_torus_knot
 from manifolds import generate_manifold
 from complexity import parse_boolean_circuit
+from algebraic import generate_algebraic_variety
 import re
 
 # --- Logging ------------------------------------------------------------------
@@ -424,4 +425,36 @@ async def process_circuit(payload: CircuitRequest) -> CircuitResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Circuit generation error: {exc}",
+        ) from exc
+
+
+@app.post(
+    "/api/process-algebraic",
+    response_model=AlgebraicResponse,
+    summary="Parse implicit algebraic equation and extract marching cubes isosurface",
+    status_code=status.HTTP_200_OK,
+    tags=["Algebraic Geometry"],
+)
+async def process_algebraic(payload: AlgebraicRequest) -> AlgebraicResponse:
+    """
+    Accepts an implicit polynomial formula string, evaluates it over a 3D grid,
+    extracts the zero-level isosurface, and computes the singularity scores.
+    """
+    try:
+        data = generate_algebraic_variety(
+            formula=payload.formula,
+            res=payload.resolution,
+            bounds=payload.bounds
+        )
+        return AlgebraicResponse(**data)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc)
+        ) from exc
+    except Exception as exc:
+        log.exception("Algebraic geometry extraction failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Algebraic geometry extraction error: {exc}",
         ) from exc
