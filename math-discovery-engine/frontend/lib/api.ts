@@ -493,3 +493,67 @@ export async function processCircuit(request: CircuitRequest): Promise<CircuitRe
     body: JSON.stringify(request),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Algebraic Geometry — Implicit Varieties
+// ---------------------------------------------------------------------------
+
+/** Request body for POST /api/process-algebraic */
+export interface AlgebraicRequest {
+  /**
+   * Implicit polynomial equation F(x, y, z) = 0.
+   * Uses Python / numexpr syntax — `**` for powers.
+   * Example: "x**2 + y**2 - z**2" (cone)
+   */
+  formula: string;
+  /**
+   * Grid resolution for the Marching Cubes voxel lattice.
+   * Higher values produce finer meshes but are slower.
+   * @default 30
+   */
+  resolution?: number;
+  /**
+   * Spatial extent: the grid spans [-bounds, bounds] on each axis.
+   * @default 3.0
+   */
+  bounds?: number;
+}
+
+/** Response from POST /api/process-algebraic */
+export interface AlgebraicResponse {
+  /** Isosurface vertices with 3D display coordinates. */
+  nodes: { id: number; fx: number; fy: number; fz: number }[];
+  /** Triangular faces as [v0, v1, v2] index triples. */
+  faces: [number, number, number][];
+  /** Wireframe edges extracted from faces as [src, tgt] pairs. */
+  edges: [number, number][];
+  /** High-level surface invariants. */
+  invariants: {
+    /** Total number of isosurface vertices. */
+    num_vertices: number;
+    /** Total number of triangular faces. */
+    num_faces: number;
+  };
+  /**
+   * Singularity scores — maps node ID → [0, 1].
+   * Score approaches 1.0 where the spatial gradient ‖∇F‖ ≈ 0,
+   * indicating a singular point (cusp, node, pinch).
+   */
+  saliency_scores: Record<number, number>;
+}
+
+/**
+ * Submit an implicit polynomial equation to the backend and receive
+ * a Marching Cubes isosurface with singularity saliency scores.
+ *
+ * @param request  An AlgebraicRequest with a formula like "x**2 + y**2 - z**2".
+ *
+ * @example
+ * const variety = await processAlgebraic({ formula: "x**2 + y**2 - z**3" });
+ */
+export async function processAlgebraic(request: AlgebraicRequest): Promise<AlgebraicResponse> {
+  return apiFetch<AlgebraicResponse>("/api/process-algebraic", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
