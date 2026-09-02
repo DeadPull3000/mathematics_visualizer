@@ -31,6 +31,7 @@ import {
   processKnot,
   processManifold,
   processCircuit,
+  processAlgebraic,
   exportToPython,
   type InputType,
   type MathRequest,
@@ -41,6 +42,8 @@ import {
   type ManifoldResponse,
   type CircuitRequest,
   type CircuitResponse,
+  type AlgebraicRequest,
+  type AlgebraicResponse,
   ApiError,
 } from "@/lib/api";
 import GraphVisualizer from "@/components/GraphVisualizer";
@@ -108,7 +111,7 @@ const DOMAINS: Domain[] = [
     subtitle: "Varieties & Schemes",
     icon: "∿",
     defaultInputType: "formula",
-    defaultRawData: "K_5",
+    defaultRawData: "x**2 + y**2 - z**2",
     color: "#D19E4A",
   },
 ];
@@ -146,7 +149,7 @@ function Sidebar({
 
       {DOMAINS.map((d) => {
         const isActive = d.id === selected.id;
-        const isLive = d.id === "combinatorics" || d.id === "knot" || d.id === "topology" || d.id === "circuit";
+        const isLive = d.id === "combinatorics" || d.id === "knot" || d.id === "topology" || d.id === "circuit" || d.id === "algebraic-geometry";
         return (
           <button
             key={d.id}
@@ -185,6 +188,82 @@ function Sidebar({
         </div>
       </div>
     </aside>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AlgebraicDropzone — implicit polynomial input for Algebraic Geometry domain
+// ---------------------------------------------------------------------------
+
+function AlgebraicDropzone({
+  domain,
+  algebraicFormula,
+  setAlgebraicFormula,
+}: {
+  domain: Domain;
+  algebraicFormula: string;
+  setAlgebraicFormula: (f: string) => void;
+}) {
+  const examples = [
+    { label: "Cone", formula: "x**2 + y**2 - z**2" },
+    { label: "Sphere", formula: "x**2 + y**2 + z**2 - 4" },
+    { label: "Torus", formula: "(sqrt(x**2 + y**2) - 2)**2 + z**2 - 1" },
+    { label: "Cusp", formula: "x**2 + y**2 - z**3" },
+    { label: "Whitney", formula: "x**2 - y**2*z" },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
+        Enter an implicit equation F(x, y, z) = 0 — uses Python / numexpr syntax
+      </div>
+      <input
+        id="algebraic-formula-input"
+        value={algebraicFormula}
+        onChange={(e) => setAlgebraicFormula(e.target.value)}
+        placeholder="x**2 + y**2 - z**2"
+        spellCheck={false}
+        autoComplete="off"
+        style={{
+          width: "100%", background: "#111315",
+          border: `1.5px solid ${domain.color}40`,
+          borderRadius: 8, padding: "12px 14px",
+          color: "#E6E4DF", fontSize: 13,
+          fontFamily: "'Courier New', monospace",
+          outline: "none", transition: "border-color 0.2s",
+          boxSizing: "border-box",
+        }}
+        onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = domain.color; }}
+        onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = `${domain.color}40`; }}
+      />
+      {/* Quick-pick example formulas */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {examples.map(({ label, formula }) => (
+          <button
+            key={label}
+            onClick={() => setAlgebraicFormula(formula)}
+            style={{
+              background: algebraicFormula === formula ? `${domain.color}30` : "#1C1F21",
+              border: `1px solid ${algebraicFormula === formula ? domain.color : "#2C3133"}`,
+              borderRadius: 6, padding: "4px 10px",
+              color: algebraicFormula === formula ? domain.color : "#888C8E",
+              cursor: "pointer", fontSize: 10, fontWeight: 600,
+              letterSpacing: "0.04em", transition: "all 0.15s ease",
+            }}
+          >{label}</button>
+        ))}
+      </div>
+      <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 8, padding: "10px 14px", fontSize: 10, lineHeight: 1.8, color: "#555A5D" }}>
+        <span style={{ color: "#888C8E", fontWeight: 600 }}>Syntax</span>
+        {"  "}
+        <code style={{ color: "#E6E4DF" }}>**</code> powers
+        {"  ·  "}
+        <code style={{ color: "#E6E4DF" }}>sqrt()</code>
+        {"  ·  "}
+        <code style={{ color: "#E6E4DF" }}>sin() cos() exp()</code>
+        {"  ·  variables: "}
+        <code style={{ color: domain.color }}>x y z</code>
+      </div>
+    </div>
   );
 }
 
@@ -962,6 +1041,137 @@ function ResultView({
 }
 
 // ---------------------------------------------------------------------------
+// AlgebraicResultView — invariants + manifold mesh for Algebraic Geometry domain
+// ---------------------------------------------------------------------------
+
+function AlgebraicResultView({
+  algebraicResult,
+  domain,
+  viewMode,
+  setViewMode,
+}: {
+  algebraicResult: AlgebraicResponse;
+  domain: Domain;
+  viewMode: "spectral" | "saliency";
+  setViewMode: (m: "spectral" | "saliency") => void;
+}) {
+  const inv = algebraicResult.invariants;
+
+  return (
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Summary cards */}
+      <div style={{ display: "flex", gap: 12 }}>
+        {[
+          { label: "Vertices",  value: inv.num_vertices, color: domain.color },
+          { label: "Faces",     value: inv.num_faces,    color: "#6B8075" },
+          { label: "Edges",     value: algebraicResult.edges.length, color: "#888C8E" },
+        ].map((s) => (
+          <div key={s.label} style={{ flex: 1, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
+            <div style={{ color: s.color, fontSize: 26, fontWeight: 700, fontFamily: "'Georgia', serif", lineHeight: 1, marginBottom: 6 }}>{s.value.toLocaleString()}</div>
+            <div style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Invariants table */}
+      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#1C1F21", overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid #2C3133" }}>
+              {["Invariant", "Value", "Mathematical Meaning"].map((h) => (
+                <th key={h} style={{ padding: "10px 14px", color: "#888C8E", fontWeight: 600, fontSize: 10, letterSpacing: "0.08em", textAlign: "left", textTransform: "uppercase" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { name: "Vertices |V|", value: inv.num_vertices.toLocaleString(), color: domain.color, desc: "Isosurface vertices extracted by Marching Cubes" },
+              { name: "Faces |F|",    value: inv.num_faces.toLocaleString(),    color: "#6B8075",    desc: "Triangular faces of the zero-level set" },
+              { name: "Edges |E|",    value: algebraicResult.edges.length.toLocaleString(), color: "#888C8E", desc: "Wireframe edges (3 per face, deduplicated)" },
+            ].map((row, i, arr) => (
+              <tr key={row.name}
+                style={{ borderBottom: i < arr.length - 1 ? "1px solid #2C3133" : "none" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#22262850"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
+              >
+                <td style={{ padding: "11px 14px", color: "#E6E4DF", fontWeight: 500 }}>{row.name}</td>
+                <td style={{ padding: "11px 14px" }}>
+                  <span style={{ background: "#2C3133", color: row.color, borderRadius: 5, padding: "3px 10px", fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700 }}>
+                    {row.value}
+                  </span>
+                </td>
+                <td style={{ padding: "11px 14px", color: "#888C8E", fontSize: 11, lineHeight: 1.5 }}>{row.desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 3D Wireframe Visualizer */}
+      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Algebraic Variety · Marching Cubes Isosurface (WebGL)
+          </div>
+          {/* View mode toggle */}
+          <div style={{ display: "flex", background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 8, padding: 3, gap: 2 }}>
+            {(["spectral", "saliency"] as const).map((mode) => {
+              const isActive = viewMode === mode;
+              const labels: Record<string, string> = {
+                spectral: "⟡ Wireframe Variety",
+                saliency: "◈ Highlight Singularities",
+              };
+              return (
+                <button
+                  key={mode}
+                  id={`algebraic-view-toggle-${mode}`}
+                  onClick={() => setViewMode(mode)}
+                  style={{
+                    background: isActive ? (mode === "saliency" ? "#C05640" : domain.color) : "transparent",
+                    border: "none", borderRadius: 6,
+                    color: isActive ? "#E6E4DF" : "#888C8E",
+                    cursor: "pointer", fontSize: 10, fontWeight: isActive ? 700 : 400,
+                    letterSpacing: "0.04em", padding: "5px 12px",
+                    transition: "all 0.2s ease", whiteSpace: "nowrap",
+                  }}
+                >{labels[mode]}</button>
+              );
+            })}
+          </div>
+        </div>
+        {/* Legend */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+          {(viewMode === "spectral"
+            ? [
+                { color: domain.color, label: "Surface vertex" },
+                { color: "#2C3133",    label: "Wireframe edge", border: `1px solid ${domain.color}60` },
+              ]
+            : [
+                { color: "#C05640", label: "Singular point (‖∇F‖ ≈ 0)" },
+                { color: "#888C8E", label: "Regular point" },
+              ]
+          ).map(({ color, label, border }: { color: string; label: string; border?: string }) => (
+            <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, border, display: "inline-block", flexShrink: 0 }} />
+              {label}
+            </span>
+          ))}
+        </div>
+        <GraphVisualizer
+          nodes={algebraicResult.nodes.map((n) => n.id)}
+          edges={algebraicResult.edges.map((e) => e as (string | number)[])}
+          knotNodes={algebraicResult.nodes.map((n) => ({ id: n.id, fx: n.fx, fy: n.fy, fz: n.fz }))}
+          faces={algebraicResult.faces as [number | string, number | string, number | string][]}
+          saliencyScores={Object.fromEntries(Object.entries(algebraicResult.saliency_scores).map(([k, v]) => [k, v]))}
+          viewMode={viewMode}
+          height={420}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // CircuitResultView — invariants + DAG visualizer for Complexity Theory domain
 // ---------------------------------------------------------------------------
 
@@ -1384,6 +1594,7 @@ function Microscope({
   knotResult,
   manifoldResult,
   circuitResult,
+  algebraicResult,
   domain,
   error,
   viewMode,
@@ -1397,6 +1608,7 @@ function Microscope({
   knotResult: KnotResponse | null;
   manifoldResult: ManifoldResponse | null;
   circuitResult: CircuitResponse | null;
+  algebraicResult: AlgebraicResponse | null;
   domain: Domain;
   error: string | null;
   viewMode: "spectral" | "saliency";
@@ -1409,6 +1621,8 @@ function Microscope({
   const isKnotDomain = domain.id === "knot";
   const isTopooDomain = domain.id === "topology";
   const isCircuitDomain = domain.id === "circuit";
+  const isAlgebraicDomain = domain.id === "algebraic-geometry";
+  const hasResult = !!(result || knotResult || manifoldResult || circuitResult || algebraicResult);
   return (
     <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 400 }}>
       <div style={{ padding: "12px 18px", borderBottom: "1px solid #2C3133", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
@@ -1416,7 +1630,7 @@ function Microscope({
           <span style={{ color: domain.color, fontSize: 14 }}>◉</span>
           <span style={{ color: "#E6E4DF", fontSize: 12, fontWeight: 600, letterSpacing: "0.06em" }}>STRUCTURE MICROSCOPE</span>
         </div>
-        {result && !isKnotDomain && !isTopooDomain && !isCircuitDomain && (
+        {result && !isKnotDomain && !isTopooDomain && !isCircuitDomain && !isAlgebraicDomain && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ background: "#6B807520", border: "1px solid #6B8075", color: "#6B8075", borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
               {result.metadata.num_nodes}V · {result.metadata.num_edges}E
@@ -1444,8 +1658,13 @@ function Microscope({
             Depth {circuitResult.invariants.depth} · {circuitResult.invariants.num_gates} gates
           </span>
         )}
+        {algebraicResult && isAlgebraicDomain && (
+          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
+            {algebraicResult.invariants.num_vertices.toLocaleString()}V · {algebraicResult.invariants.num_faces.toLocaleString()}F
+          </span>
+        )}
       </div>
-      <div style={{ flex: 1, display: "flex", alignItems: error || (!result && !knotResult && !manifoldResult && !circuitResult) ? "center" : "flex-start", justifyContent: error || (!result && !knotResult && !manifoldResult && !circuitResult) ? "center" : "flex-start", padding: 24, overflowY: "auto" }}>
+      <div style={{ flex: 1, display: "flex", alignItems: error || !hasResult ? "center" : "flex-start", justifyContent: error || !hasResult ? "center" : "flex-start", padding: 24, overflowY: "auto" }}>
         {error ? (
           <div style={{ textAlign: "center", maxWidth: 420 }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚠</div>
@@ -1467,6 +1686,12 @@ function Microscope({
         ) : isCircuitDomain ? (
           circuitResult ? (
             <CircuitResultView circuitResult={circuitResult} domain={domain} viewMode={viewMode} setViewMode={setViewMode} />
+          ) : (
+            <EmptyMicroscope domain={domain} />
+          )
+        ) : isAlgebraicDomain ? (
+          algebraicResult ? (
+            <AlgebraicResultView algebraicResult={algebraicResult} domain={domain} viewMode={viewMode} setViewMode={setViewMode} />
           ) : (
             <EmptyMicroscope domain={domain} />
           )
@@ -1665,7 +1890,9 @@ export default function HomePage() {
   const [knotResult, setKnotResult] = useState<KnotResponse | null>(null);
   const [manifoldResult, setManifoldResult] = useState<ManifoldResponse | null>(null);
   const [circuitResult, setCircuitResult] = useState<CircuitResponse | null>(null);
+  const [algebraicResult, setAlgebraicResult] = useState<AlgebraicResponse | null>(null);
   const [circuitFormula, setCircuitFormula] = useState("(x1 & x2) | (~x3 & x4)");
+  const [algebraicFormula, setAlgebraicFormula] = useState("x**2 + y**2 - z**2");
   const [error, setError] = useState<string | null>(null);
   const [paramsOpen, setParamsOpen] = useState(false);
   const [params, setParams] = useState<Record<string, number>>({
@@ -1686,6 +1913,7 @@ export default function HomePage() {
   const isKnotDomain = selectedDomain.id === "knot";
   const isTopologyDomain = selectedDomain.id === "topology";
   const isCircuitDomain = selectedDomain.id === "circuit";
+  const isAlgebraicDomain = selectedDomain.id === "algebraic-geometry";
 
   // Clear results when switching domain
   const handleDomainSelect = useCallback((d: Domain) => {
@@ -1694,6 +1922,7 @@ export default function HomePage() {
     setKnotResult(null);
     setManifoldResult(null);
     setCircuitResult(null);
+    setAlgebraicResult(null);
     setError(null);
     setHistory([]);
     setDeletedEdges([]);
@@ -1701,7 +1930,7 @@ export default function HomePage() {
     setPerturbationCount(0);
   }, []);
 
-  useEffect(() => { setResult(null); setKnotResult(null); setManifoldResult(null); setCircuitResult(null); setError(null); }, [selectedDomain]);
+  useEffect(() => { setResult(null); setKnotResult(null); setManifoldResult(null); setCircuitResult(null); setAlgebraicResult(null); setError(null); }, [selectedDomain]);
 
   const handleFileLoad = useCallback((raw: string) => {
     setFileContent(raw);
@@ -1709,7 +1938,7 @@ export default function HomePage() {
   }, []);
 
   const handleDiscover = useCallback(async () => {
-    setIsLoading(true); setError(null); setResult(null); setKnotResult(null); setManifoldResult(null);
+    setIsLoading(true); setError(null); setResult(null); setKnotResult(null); setManifoldResult(null); setCircuitResult(null); setAlgebraicResult(null);
 
     // ── Topology domain (Surfaces & Manifolds) ────────────────────────────────
     if (isTopologyDomain) {
@@ -1754,6 +1983,28 @@ export default function HomePage() {
         const response = await processCircuit({ formula: trimmed });
         setCircuitResult(response);
         setHistory([{ id: Date.now().toString(), type: "genesis", detail: `Circuit: ${trimmed.slice(0, 40)}` }]);
+      } catch (err) {
+        let msg: string;
+        if (err instanceof ApiError) msg = err.detail;
+        else if (err instanceof Error) msg = err.message;
+        else msg = String(err);
+        setError(msg);
+      } finally { setIsLoading(false); }
+      return;
+    }
+
+    // ── Algebraic Geometry (Implicit Varieties) ───────────────────────────
+    if (isAlgebraicDomain) {
+      const trimmed = algebraicFormula.trim();
+      if (!trimmed) {
+        setError("Formula is empty. Try: x**2 + y**2 - z**2");
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const response = await processAlgebraic({ formula: trimmed });
+        setAlgebraicResult(response);
+        setHistory([{ id: Date.now().toString(), type: "genesis", detail: `Variety: F(x,y,z) = ${trimmed.slice(0, 40)}` }]);
       } catch (err) {
         let msg: string;
         if (err instanceof ApiError) msg = err.detail;
@@ -1818,7 +2069,7 @@ export default function HomePage() {
       }
       setError(msg);
     } finally { setIsLoading(false); }
-  }, [isTopologyDomain, manifoldShape, deformation, exprX, exprY, exprZ, uMin, uMax, vMin, vMax, isKnotDomain, knotFormula, isCircuitDomain, circuitFormula, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
+  }, [isTopologyDomain, manifoldShape, deformation, exprX, exprY, exprZ, uMin, uMax, vMin, vMax, isKnotDomain, knotFormula, isCircuitDomain, circuitFormula, isAlgebraicDomain, algebraicFormula, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
 
   /**
    * handleEdgeRemove — called by GraphVisualizer when the user clicks an edge.
@@ -1971,10 +2222,10 @@ export default function HomePage() {
             <section style={{ flexShrink: 0, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: 280 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                  {isTopologyDomain ? "◎ Manifold Shape" : isKnotDomain ? "∞ Knot Formula" : isCircuitDomain ? "⊕ Boolean Circuit" : "⬆ Input / Data Source"}
+                  {isTopologyDomain ? "◎ Manifold Shape" : isKnotDomain ? "∞ Knot Formula" : isCircuitDomain ? "⊕ Boolean Circuit" : isAlgebraicDomain ? "∿ Implicit Polynomial" : "⬆ Input / Data Source"}
                 </span>
                 <span style={{ color: "#888C8E", fontSize: 10 }}>
-                  {isTopologyDomain ? "Parametric mesh · Laplacian harmonics" : isKnotDomain ? "Torus knot parametric engine" : isCircuitDomain ? "AST parser · DAG · Critical path" : "All parsing is performed server-side"}
+                  {isTopologyDomain ? "Parametric mesh · Laplacian harmonics" : isKnotDomain ? "Torus knot parametric engine" : isCircuitDomain ? "AST parser · DAG · Critical path" : isAlgebraicDomain ? "Marching Cubes · Singularity scores" : "All parsing is performed server-side"}
                 </span>
               </div>
               {isTopologyDomain ? (
@@ -2003,6 +2254,12 @@ export default function HomePage() {
                   domain={selectedDomain}
                   circuitFormula={circuitFormula}
                   setCircuitFormula={setCircuitFormula}
+                />
+              ) : isAlgebraicDomain ? (
+                <AlgebraicDropzone
+                  domain={selectedDomain}
+                  algebraicFormula={algebraicFormula}
+                  setAlgebraicFormula={setAlgebraicFormula}
                 />
               ) : (
                 <Dropzone
@@ -2035,15 +2292,15 @@ export default function HomePage() {
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
             >
               {isLoading ? (
-                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isTopologyDomain ? "Generating Mesh…" : isKnotDomain ? "Generating Knot…" : isCircuitDomain ? "Parsing Circuit…" : "Computing Invariants…"}</>
+                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isTopologyDomain ? "Generating Mesh…" : isKnotDomain ? "Generating Knot…" : isCircuitDomain ? "Parsing Circuit…" : isAlgebraicDomain ? "Tracing Variety…" : "Computing Invariants…"}</>
               ) : (
-                <><span>{isTopologyDomain ? "◎" : isKnotDomain ? "∞" : isCircuitDomain ? "⊕" : "⚗"}</span> {isTopologyDomain ? "Generate Manifold" : isKnotDomain ? "Generate Knot" : isCircuitDomain ? "Analyse Circuit" : "Discover Structure"}</>
+                <><span>{isTopologyDomain ? "◎" : isKnotDomain ? "∞" : isCircuitDomain ? "⊕" : isAlgebraicDomain ? "∿" : "⚗"}</span> {isTopologyDomain ? "Generate Manifold" : isKnotDomain ? "Generate Knot" : isCircuitDomain ? "Analyse Circuit" : isAlgebraicDomain ? "Extract Variety" : "Discover Structure"}</>
               )}
             </button>
 
             {/* Structure Microscope */}
             <section style={{ flexShrink: 0, minHeight: 400 }}>
-              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} circuitResult={circuitResult} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain || isCircuitDomain ? undefined : handleEdgeRemove} onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
+              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} circuitResult={circuitResult} algebraicResult={algebraicResult} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain || isCircuitDomain || isAlgebraicDomain ? undefined : handleEdgeRemove} onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
             </section>
           </main>
 
