@@ -466,3 +466,11 @@ class AlgebraicResponse(BaseModel):
     edges: list[list[int]] = Field(..., description="List of [source, target] edge pairs")
     invariants: dict = Field(..., description="Invariants (num_vertices, num_faces)")
     saliency_scores: dict[int, float] = Field(..., description="Singularity Score mapping node ID to [0.0, 1.0]")
+
+class BatchRequest(BaseModel):
+    """Payload for generating a batch of random graphs."""
+    num_samples: int = Field(100, description="Number of random graphs to generate")
+
+class BatchResponse(BaseModel):
+    """Response containing batch graph dataset."""
+    data: list[dict] = Field(..., description="List of dictionaries containing graph properties")

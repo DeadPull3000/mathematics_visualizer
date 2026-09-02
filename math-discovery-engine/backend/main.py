@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
-from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse, CircuitRequest, CircuitResponse, AlgebraicRequest, AlgebraicResponse
+from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse, CircuitRequest, CircuitResponse, AlgebraicRequest, AlgebraicResponse, BatchRequest, BatchResponse
 from parsers import parse_edge_list, parse_formula, parse_json
 from topology import compute_spectral_topology, compute_betti_numbers
 from ml_engine import compute_gradient_saliency
@@ -32,6 +32,7 @@ from knot_theory import generate_torus_knot
 from manifolds import generate_manifold
 from complexity import parse_boolean_circuit
 from algebraic import generate_algebraic_variety
+from batch import generate_batch_data
 import re
 
 # --- Logging ------------------------------------------------------------------
@@ -457,4 +458,26 @@ async def process_algebraic(payload: AlgebraicRequest) -> AlgebraicResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Algebraic geometry extraction error: {exc}",
+        ) from exc
+
+@app.post(
+    "/api/process-batch",
+    response_model=BatchResponse,
+    summary="Generate a batch of random graphs and invariants",
+    status_code=status.HTTP_200_OK,
+    tags=["Batch Dataset Explorer"],
+)
+async def process_batch(payload: BatchRequest) -> BatchResponse:
+    """
+    Generate a random dataset of Erdos-Renyi graphs, computing 
+    Betti-0, edge density, and Algebraic Connectivity.
+    """
+    try:
+        data = generate_batch_data(payload.num_samples)
+        return BatchResponse(data=data)
+    except Exception as exc:
+        log.exception("Batch generation failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Batch generation error: {exc}",
         ) from exc
