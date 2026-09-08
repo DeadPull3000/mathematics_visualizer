@@ -9,3 +9,7 @@ scipy
 gudhi
 
 torch
+scikit-image
+numexpr
+ripser
+scikit-learn

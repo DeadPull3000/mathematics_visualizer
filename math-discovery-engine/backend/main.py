@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
-from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse, CircuitRequest, CircuitResponse, AlgebraicRequest, AlgebraicResponse, BatchRequest, BatchResponse
+from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse, CircuitRequest, CircuitResponse, AlgebraicRequest, AlgebraicResponse, BatchRequest, BatchResponse, TDARequest, TDAResponse
 from parsers import parse_edge_list, parse_formula, parse_json
 from topology import compute_spectral_topology, compute_betti_numbers
 from ml_engine import compute_gradient_saliency
@@ -33,6 +33,7 @@ from manifolds import generate_manifold
 from complexity import parse_boolean_circuit
 from algebraic import generate_algebraic_variety
 from batch import generate_batch_data
+from tda import process_tda
 import re
 
 # --- Logging ------------------------------------------------------------------
@@ -480,4 +481,32 @@ async def process_batch(payload: BatchRequest) -> BatchResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Batch generation error: {exc}",
+        ) from exc
+
+
+@app.post(
+    "/api/process-tda",
+    response_model=TDAResponse,
+    summary="Compute persistent homology for a 3D point cloud",
+    status_code=status.HTTP_200_OK,
+    tags=["Persistent Homology"],
+)
+async def api_process_tda(payload: TDARequest) -> TDAResponse:
+    """
+    Accepts point cloud generation parameters, computes persistent homology (H0 and H1 barcodes),
+    and returns 3D coordinates alongside persistence barcodes.
+    """
+    try:
+        data = process_tda(payload)
+        return TDAResponse(**data) if isinstance(data, dict) else data
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        log.exception("TDA computation failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"TDA computation error: {exc}",
         ) from exc
