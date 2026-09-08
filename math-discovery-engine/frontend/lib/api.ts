@@ -607,3 +607,49 @@ export async function processBatch(request: BatchRequest): Promise<BatchResponse
     body: JSON.stringify(request),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Topological Data Analysis (Persistent Homology)
+// ---------------------------------------------------------------------------
+
+/** Request body for POST /api/process-tda */
+export interface TDARequest {
+  /** Point cloud shape: "noisy_circle" | "noisy_sphere" | "random_noise". */
+  shape: "noisy_circle" | "noisy_sphere" | "random_noise" | string;
+  /** Number of sample points in the cloud. Default: 150. */
+  num_points?: number;
+  /** Standard deviation of Gaussian noise. Default: 0.15. */
+  noise_level?: number;
+}
+
+/** Response from POST /api/process-tda */
+export interface TDAResponse {
+  /** 3D coordinates for each sample point in the point cloud. */
+  nodes: { id: number; fx: number; fy: number; fz: number }[];
+  /**
+   * Persistence barcodes:
+   * H0: 0-dimensional components (birth-death pairs)
+   * H1: 1-dimensional loops/holes (birth-death pairs)
+   */
+  barcodes: {
+    H0: [number, number][];
+    H1: [number, number][];
+  };
+}
+
+/**
+ * Send a TDA request to generate a 3D point cloud and compute Vietoris-Rips
+ * persistent homology barcodes (H0 and H1).
+ *
+ * @param request  A TDARequest specifying shape, num_points, and noise_level.
+ *
+ * @example
+ * const tda = await processTDA({ shape: "noisy_circle", num_points: 150, noise_level: 0.15 });
+ */
+export async function processTDA(request: TDARequest): Promise<TDAResponse> {
+  return apiFetch<TDAResponse>("/api/process-tda", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
