@@ -33,6 +33,7 @@ import {
   processCircuit,
   processAlgebraic,
   processBatch,
+  processTDA,
   exportToPython,
   type InputType,
   type MathRequest,
@@ -46,10 +47,13 @@ import {
   type AlgebraicRequest,
   type AlgebraicResponse,
   type BatchDataPoint,
+  type TDARequest,
+  type TDAResponse,
   ApiError,
 } from "@/lib/api";
 import GraphVisualizer from "@/components/GraphVisualizer";
 import BatchVisualizer from "@/components/BatchVisualizer";
+import BarcodeVisualizer from "@/components/BarcodeVisualizer";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -126,6 +130,15 @@ const DOMAINS: Domain[] = [
     defaultRawData: "",
     color: "#6B8075",
   },
+  {
+    id: "tda",
+    label: "Topological Data Analysis",
+    subtitle: "Persistent Homology",
+    icon: "⧖",
+    defaultInputType: "formula",
+    defaultRawData: "noisy_circle",
+    color: "#C05640",
+  },
 ];
 
 function Sidebar({
@@ -161,7 +174,7 @@ function Sidebar({
 
       {DOMAINS.map((d) => {
         const isActive = d.id === selected.id;
-        const isLive = d.id === "combinatorics" || d.id === "knot" || d.id === "topology" || d.id === "circuit" || d.id === "algebraic-geometry" || d.id === "batch-explorer";
+        const isLive = d.id === "combinatorics" || d.id === "knot" || d.id === "topology" || d.id === "circuit" || d.id === "algebraic-geometry" || d.id === "batch-explorer" || d.id === "tda";
         return (
           <button
             key={d.id}
@@ -378,6 +391,179 @@ function KnotDropzone({
         <code style={{ color: "#E6E4DF" }}>T_5_3</code>  — Torus knot (5,3) &nbsp;<span style={{ color: "#D19E4A", fontFamily: "'Georgia',serif", fontSize: 12 }}>c = 8</span><br />
         <code style={{ color: "#E6E4DF" }}>T_7_2</code>  — Heptafoil knot &nbsp;&nbsp;<span style={{ color: "#D19E4A", fontFamily: "'Georgia',serif", fontSize: 12 }}>c = 7</span><br />
         <span style={{ color: "#2C3133", fontSize: 10 }}>Formula: c = min(p(q−1), q(p−1)) · Both p, q must be coprime integers ≥ 2</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TDADropzone — Point cloud & persistent homology configuration
+// ---------------------------------------------------------------------------
+
+function TDADropzone({
+  domain,
+  shape,
+  setShape,
+  numPoints,
+  setNumPoints,
+  noiseLevel,
+  setNoiseLevel,
+  onCompute,
+  isLoading,
+}: {
+  domain: Domain;
+  shape: "noisy_circle" | "noisy_sphere" | "random_noise";
+  setShape: (s: "noisy_circle" | "noisy_sphere" | "random_noise") => void;
+  numPoints: number;
+  setNumPoints: (n: number) => void;
+  noiseLevel: number;
+  setNoiseLevel: (l: number) => void;
+  onCompute: () => void;
+  isLoading: boolean;
+}) {
+  const shapes: { id: "noisy_circle" | "noisy_sphere" | "random_noise"; label: string; desc: string; icon: string }[] = [
+    { id: "noisy_circle", label: "Noisy Circle", desc: "S¹ with Gaussian jitter · prominent 1D cycle H₁", icon: "◯" },
+    { id: "noisy_sphere", label: "Noisy Sphere", desc: "S² spherical surface · 2D topology · trivial H₁", icon: "🌐" },
+    { id: "random_noise", label: "Pure Noise", desc: "Uniform [-1, 1]³ box · stochastic null hypothesis", icon: "⁘" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
+          Select point cloud manifold geometry and calibrate Vietoris-Rips filtration
+        </div>
+        <button
+          onClick={onCompute}
+          disabled={isLoading}
+          style={{
+            background: `${domain.color}25`,
+            border: `1px solid ${domain.color}`,
+            borderRadius: 6,
+            color: domain.color,
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            padding: "5px 14px",
+            cursor: isLoading ? "not-allowed" : "pointer",
+            transition: "all 0.15s ease",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            textTransform: "uppercase",
+          }}
+          onMouseEnter={(e) => {
+            if (!isLoading) (e.currentTarget as HTMLButtonElement).style.background = `${domain.color}40`;
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = `${domain.color}25`;
+          }}
+        >
+          <span>⧖</span>
+          {isLoading ? "Computing…" : "Compute Homology"}
+        </button>
+      </div>
+
+      {/* Shape selection buttons */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
+        {shapes.map((s) => {
+          const isSelected = shape === s.id;
+          return (
+            <button
+              key={s.id}
+              onClick={() => setShape(s.id)}
+              style={{
+                background: isSelected ? `${domain.color}25` : "#111315",
+                border: `1.5px solid ${isSelected ? domain.color : "#2C3133"}`,
+                borderRadius: 8,
+                padding: "12px 14px",
+                textAlign: "left",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ color: isSelected ? "#E6E4DF" : "#888C8E", fontSize: 13, fontWeight: 600 }}>
+                  {s.icon} {s.label}
+                </span>
+                {isSelected && (
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: domain.color }} />
+                )}
+              </div>
+              <span style={{ color: isSelected ? "#C2BFB8" : "#555A5D", fontSize: 10, lineHeight: 1.4 }}>
+                {s.desc}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Sliders: Sample Points & Noise Level */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        {/* Sample Count */}
+        <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              Sample Points |X|
+            </span>
+            <span style={{ color: domain.color, fontFamily: "'Courier New', monospace", fontSize: 13, fontWeight: 700 }}>
+              {numPoints}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={40}
+            max={300}
+            step={10}
+            value={numPoints}
+            onChange={(e) => setNumPoints(Number(e.target.value))}
+            style={{ width: "100%", accentColor: domain.color }}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", color: "#3A3F42", fontSize: 9 }}>
+            <span>40</span>
+            <span>150 (optimal)</span>
+            <span>300</span>
+          </div>
+        </div>
+
+        {/* Noise Level */}
+        <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              Noise Level (σ)
+            </span>
+            <span style={{ color: domain.color, fontFamily: "'Courier New', monospace", fontSize: 13, fontWeight: 700 }}>
+              {noiseLevel.toFixed(2)}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0.0}
+            max={0.4}
+            step={0.02}
+            value={noiseLevel}
+            onChange={(e) => setNoiseLevel(Number(e.target.value))}
+            style={{ width: "100%", accentColor: domain.color }}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", color: "#3A3F42", fontSize: 9 }}>
+            <span>0.00 (clean)</span>
+            <span>0.15 (standard)</span>
+            <span>0.40 (heavy)</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Mathematical Reference Note */}
+      <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 8, padding: "10px 14px", fontSize: 10, lineHeight: 1.8, color: "#555A5D" }}>
+        <span style={{ color: "#888C8E", fontWeight: 600 }}>Vietoris-Rips Complex: </span>
+        Simplices formed when pairwise distance ≤ 2ε.
+        {"  ·  "}
+        <span style={{ color: "#6B8075" }}>H₀</span> connected clusters
+        {"  ·  "}
+        <span style={{ color: "#C05640" }}>H₁</span> persistent 1D loops
       </div>
     </div>
   );
@@ -1464,7 +1650,7 @@ function KnotResultView({
     { name: "Parameters (p,q)",value: `(${inv.p}, ${inv.q})`, color: "#D19E4A",  desc: "Torus knot winding numbers" },
     { name: "Crossing Number", value: inv.crossing_number,  color: "#C05640",    desc: "Minimum crossings over all diagrams" },
     { name: "Strand Count",    value: knotResult.nodes.length, color: "#6B8075", desc: "Parametric sample points" },
-    { name: "Writhe (Gauss)",  value: inv.writhe.toFixed(4), color: "#D19E4A",  desc: "Discrete Gauss linking integral" },
+    { name: "Writhe (Gauss)",  value: inv.writhe != null ? inv.writhe.toFixed(4) : "—", color: "#D19E4A",  desc: "Discrete Gauss linking integral" },
   ];
 
   return (
@@ -1475,7 +1661,7 @@ function KnotResultView({
           { label: "p",           value: inv.p,              color: "#D19E4A" },
           { label: "q",           value: inv.q,              color: "#6B8075" },
           { label: "Crossings c", value: inv.crossing_number, color: "#C05640" },
-          { label: "Writhe",      value: inv.writhe.toFixed(2), color: "#D19E4A" },
+          { label: "Writhe",      value: inv.writhe != null ? inv.writhe.toFixed(2) : "—", color: "#D19E4A" },
         ].map((s) => (
           <div key={s.label} style={{ flex: 1, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
             <div style={{ color: s.color, fontSize: 26, fontWeight: 700, fontFamily: "'Georgia', serif", lineHeight: 1, marginBottom: 6 }}>{s.value}</div>
@@ -1601,6 +1787,116 @@ function KnotResultView({
   );
 }
 
+// ---------------------------------------------------------------------------
+// TDAResultView — 3D Point Cloud and Persistent Homology Barcode
+// ---------------------------------------------------------------------------
+
+function TDAResultView({
+  tdaResult,
+  domain,
+}: {
+  tdaResult: TDAResponse;
+  domain: Domain;
+}) {
+  const h0Count = tdaResult.barcodes?.H0?.length ?? 0;
+  const h1Count = tdaResult.barcodes?.H1?.length ?? 0;
+
+  return (
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Summary metric cards */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {[
+          { label: "Point Cloud |X|", value: tdaResult.nodes.length, color: "#E6E4DF" },
+          { label: "H₀ Components", value: h0Count, color: "#6B8075" },
+          { label: "H₁ Loops", value: h1Count, color: "#C05640" },
+          { label: "Metric Space", value: "ℝ³ Euclidean", color: "#D19E4A" },
+        ].map((card) => (
+          <div
+            key={card.label}
+            style={{
+              flex: 1,
+              minWidth: 140,
+              background: "#1C1F21",
+              border: "1px solid #2C3133",
+              borderRadius: 10,
+              padding: "14px 16px",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                color: card.color,
+                fontSize: 24,
+                fontWeight: 700,
+                fontFamily: "'Georgia', serif",
+                lineHeight: 1,
+                marginBottom: 6,
+              }}
+            >
+              {card.value}
+            </div>
+            <div
+              style={{
+                color: "#888C8E",
+                fontSize: 10,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+              }}
+            >
+              {card.label}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 3D Point Cloud Visualizer (no edges) */}
+      <div
+        style={{
+          border: "1px solid #2C3133",
+          borderRadius: 10,
+          background: "#0F1113",
+          padding: "14px 14px 10px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 10,
+          }}
+        >
+          <div
+            style={{
+              color: "#888C8E",
+              fontSize: 9,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              fontWeight: 600,
+            }}
+          >
+            3D Point Cloud Metric Space (WebGL) · {tdaResult.nodes.length} Nodes
+          </div>
+          <span style={{ color: "#555A5D", fontSize: 9 }}>
+            Orbit: Left drag · Pan: Right drag · Zoom: Wheel
+          </span>
+        </div>
+
+        <GraphVisualizer
+          nodes={tdaResult.nodes.map((n) => n.id)}
+          edges={[]}
+          knotNodes={tdaResult.nodes}
+          viewMode="spectral"
+          height={380}
+        />
+      </div>
+
+      {/* Persistence Barcode Visualizer */}
+      <BarcodeVisualizer barcodes={tdaResult.barcodes} />
+    </div>
+  );
+}
+
 function Microscope({
   result,
   knotResult,
@@ -1608,6 +1904,7 @@ function Microscope({
   circuitResult,
   algebraicResult,
   batchData,
+  tdaResult,
   domain,
   error,
   viewMode,
@@ -1623,6 +1920,7 @@ function Microscope({
   circuitResult: CircuitResponse | null;
   algebraicResult: AlgebraicResponse | null;
   batchData: BatchDataPoint[] | null;
+  tdaResult: TDAResponse | null;
   domain: Domain;
   error: string | null;
   viewMode: "spectral" | "saliency";
@@ -1637,7 +1935,8 @@ function Microscope({
   const isCircuitDomain = domain.id === "circuit";
   const isAlgebraicDomain = domain.id === "algebraic-geometry";
   const isBatchDomain = domain.id === "batch-explorer";
-  const hasResult = !!(result || knotResult || manifoldResult || circuitResult || algebraicResult || batchData);
+  const isTDADomain = domain.id === "tda";
+  const hasResult = !!(result || knotResult || manifoldResult || circuitResult || algebraicResult || batchData || tdaResult);
   return (
     <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 400 }}>
       <div style={{ padding: "12px 18px", borderBottom: "1px solid #2C3133", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
@@ -1647,7 +1946,7 @@ function Microscope({
             {isBatchDomain ? "BATCH ANALYSIS" : "STRUCTURE MICROSCOPE"}
           </span>
         </div>
-        {result && !isKnotDomain && !isTopooDomain && !isCircuitDomain && !isAlgebraicDomain && !isBatchDomain && (
+        {result && !isKnotDomain && !isTopooDomain && !isCircuitDomain && !isAlgebraicDomain && !isBatchDomain && !isTDADomain && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ background: "#6B807520", border: "1px solid #6B8075", color: "#6B8075", borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
               {result.metadata.num_nodes}V · {result.metadata.num_edges}E
@@ -1685,6 +1984,11 @@ function Microscope({
             Samples: {batchData.length}
           </span>
         )}
+        {tdaResult && isTDADomain && (
+          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
+            TDA · {tdaResult.nodes.length} pts · H₁: {tdaResult.barcodes.H1.length} loops
+          </span>
+        )}
       </div>
       <div style={{ flex: 1, display: "flex", alignItems: error || !hasResult ? "center" : "flex-start", justifyContent: error || !hasResult ? "center" : "flex-start", padding: 24, overflowY: "auto" }}>
         {error ? (
@@ -1720,6 +2024,12 @@ function Microscope({
         ) : isBatchDomain ? (
           batchData ? (
             <BatchVisualizer data={batchData} />
+          ) : (
+            <EmptyMicroscope domain={domain} />
+          )
+        ) : isTDADomain ? (
+          tdaResult ? (
+            <TDAResultView tdaResult={tdaResult} domain={domain} />
           ) : (
             <EmptyMicroscope domain={domain} />
           )
@@ -1940,12 +2250,19 @@ export default function HomePage() {
   // batchData: results from the Batch Dataset Explorer.
   const [batchData, setBatchData] = useState<BatchDataPoint[] | null>(null);
   const [batchSamples, setBatchSamples] = useState(100);
+  // tdaResult: results from the Topological Data Analysis (Persistent Homology) engine.
+  const [tdaResult, setTDAResult] = useState<TDAResponse | null>(null);
+  const [tdaShape, setTdaShape] = useState<"noisy_circle" | "noisy_sphere" | "random_noise">("noisy_circle");
+  const [tdaNumPoints, setTdaNumPoints] = useState(150);
+  const [tdaNoiseLevel, setTdaNoiseLevel] = useState(0.15);
 
-  const isKnotDomain = selectedDomain.id === "knot";
-  const isTopologyDomain = selectedDomain.id === "topology";
-  const isCircuitDomain = selectedDomain.id === "circuit";
-  const isAlgebraicDomain = selectedDomain.id === "algebraic-geometry";
-  const isBatchDomain = selectedDomain.id === "batch-explorer";
+  const activeDomain = selectedDomain.id;
+  const isKnotDomain = activeDomain === "knot";
+  const isTopologyDomain = activeDomain === "topology";
+  const isCircuitDomain = activeDomain === "circuit";
+  const isAlgebraicDomain = activeDomain === "algebraic-geometry";
+  const isBatchDomain = activeDomain === "batch-explorer";
+  const isTDADomain = activeDomain === "tda";
 
   // Clear results when switching domain
   const handleDomainSelect = useCallback((d: Domain) => {
@@ -1956,6 +2273,7 @@ export default function HomePage() {
     setCircuitResult(null);
     setAlgebraicResult(null);
     setBatchData(null);
+    setTDAResult(null);
     setError(null);
     setHistory([]);
     setDeletedEdges([]);
@@ -1963,7 +2281,16 @@ export default function HomePage() {
     setPerturbationCount(0);
   }, []);
 
-  useEffect(() => { setResult(null); setKnotResult(null); setManifoldResult(null); setCircuitResult(null); setAlgebraicResult(null); setBatchData(null); setError(null); }, [selectedDomain]);
+  useEffect(() => {
+    setResult(null);
+    setKnotResult(null);
+    setManifoldResult(null);
+    setCircuitResult(null);
+    setAlgebraicResult(null);
+    setBatchData(null);
+    setTDAResult(null);
+    setError(null);
+  }, [selectedDomain]);
 
   const handleFileLoad = useCallback((raw: string) => {
     setFileContent(raw);
@@ -1971,7 +2298,7 @@ export default function HomePage() {
   }, []);
 
   const handleDiscover = useCallback(async () => {
-    setIsLoading(true); setError(null); setResult(null); setKnotResult(null); setManifoldResult(null); setCircuitResult(null); setAlgebraicResult(null);
+    setIsLoading(true); setError(null); setResult(null); setKnotResult(null); setManifoldResult(null); setCircuitResult(null); setAlgebraicResult(null); setTDAResult(null);
 
     // ── Topology domain (Surfaces & Manifolds) ────────────────────────────────
     if (isTopologyDomain) {
@@ -2069,6 +2396,30 @@ export default function HomePage() {
       return;
     }
 
+    // ── Topological Data Analysis (Persistent Homology) ───────────────────
+    if (isTDADomain) {
+      try {
+        const response = await processTDA({
+          shape: tdaShape,
+          num_points: tdaNumPoints,
+          noise_level: tdaNoiseLevel,
+        });
+        setTDAResult(response);
+        setHistory([{
+          id: Date.now().toString(),
+          type: "genesis",
+          detail: `TDA: ${tdaShape} (${tdaNumPoints} pts, σ=${tdaNoiseLevel})`,
+        }]);
+      } catch (err) {
+        let msg: string;
+        if (err instanceof ApiError) msg = err.detail;
+        else if (err instanceof Error) msg = err.message;
+        else msg = String(err);
+        setError(msg);
+      } finally { setIsLoading(false); }
+      return;
+    }
+
     // ── Combinatorics / other graph domains ────────────────────────────────
     try {
       let inputType: InputType;
@@ -2102,7 +2453,7 @@ export default function HomePage() {
       }
       setError(msg);
     } finally { setIsLoading(false); }
-  }, [isTopologyDomain, manifoldShape, deformation, exprX, exprY, exprZ, uMin, uMax, vMin, vMax, isKnotDomain, knotFormula, isCircuitDomain, circuitFormula, isAlgebraicDomain, algebraicFormula, isBatchDomain, batchSamples, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
+  }, [isTopologyDomain, manifoldShape, deformation, exprX, exprY, exprZ, uMin, uMax, vMin, vMax, isKnotDomain, knotFormula, isCircuitDomain, circuitFormula, isAlgebraicDomain, algebraicFormula, isBatchDomain, batchSamples, isTDADomain, tdaShape, tdaNumPoints, tdaNoiseLevel, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
 
   /** handleBatchGenerate — called by the Batch Explorer "generate" button. */
   const handleBatchGenerate = useCallback(async (n: number) => {
@@ -2271,10 +2622,10 @@ export default function HomePage() {
             <section style={{ flexShrink: 0, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: 280 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                  {isTopologyDomain ? "◎ Manifold Shape" : isKnotDomain ? "∞ Knot Formula" : isCircuitDomain ? "⊕ Boolean Circuit" : isAlgebraicDomain ? "∿ Implicit Polynomial" : isBatchDomain ? "⋯ Batch Configuration" : "⬆ Input / Data Source"}
+                  {isTopologyDomain ? "◎ Manifold Shape" : isKnotDomain ? "∞ Knot Formula" : isCircuitDomain ? "⊕ Boolean Circuit" : isAlgebraicDomain ? "∿ Implicit Polynomial" : isBatchDomain ? "⋯ Batch Configuration" : isTDADomain ? "⧖ Point Cloud & Filtration" : "⬆ Input / Data Source"}
                 </span>
                 <span style={{ color: "#888C8E", fontSize: 10 }}>
-                  {isTopologyDomain ? "Parametric mesh · Laplacian harmonics" : isKnotDomain ? "Torus knot parametric engine" : isCircuitDomain ? "AST parser · DAG · Critical path" : isAlgebraicDomain ? "Marching Cubes · Singularity scores" : isBatchDomain ? "Erdős-Rényi · G(N, p) random ensemble" : "All parsing is performed server-side"}
+                  {isTopologyDomain ? "Parametric mesh · Laplacian harmonics" : isKnotDomain ? "Torus knot parametric engine" : isCircuitDomain ? "AST parser · DAG · Critical path" : isAlgebraicDomain ? "Marching Cubes · Singularity scores" : isBatchDomain ? "Erdős-Rényi · G(N, p) random ensemble" : isTDADomain ? "Vietoris-Rips filtration · H₀ & H₁ barcodes" : "All parsing is performed server-side"}
                 </span>
               </div>
               {isTopologyDomain ? (
@@ -2361,6 +2712,18 @@ export default function HomePage() {
                     <span style={{ color: "#6B8075" }}>●</span> Disconnected (β₀&gt;1)
                   </div>
                 </div>
+              ) : isTDADomain ? (
+                <TDADropzone
+                  domain={selectedDomain}
+                  shape={tdaShape}
+                  setShape={setTdaShape}
+                  numPoints={tdaNumPoints}
+                  setNumPoints={setTdaNumPoints}
+                  noiseLevel={tdaNoiseLevel}
+                  setNoiseLevel={setTdaNoiseLevel}
+                  onCompute={handleDiscover}
+                  isLoading={isLoading}
+                />
               ) : (
                 <Dropzone
                   domain={selectedDomain}
@@ -2392,15 +2755,15 @@ export default function HomePage() {
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
             >
               {isLoading ? (
-                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isTopologyDomain ? "Generating Mesh…" : isKnotDomain ? "Generating Knot…" : isCircuitDomain ? "Parsing Circuit…" : isAlgebraicDomain ? "Tracing Variety…" : isBatchDomain ? `Sampling ${batchSamples} Graphs…` : "Computing Invariants…"}</>
+                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isTopologyDomain ? "Generating Mesh…" : isKnotDomain ? "Generating Knot…" : isCircuitDomain ? "Parsing Circuit…" : isAlgebraicDomain ? "Tracing Variety…" : isBatchDomain ? `Sampling ${batchSamples} Graphs…` : isTDADomain ? "Computing Homology…" : "Computing Invariants…"}</>
               ) : (
-                <><span>{isTopologyDomain ? "◎" : isKnotDomain ? "∞" : isCircuitDomain ? "⊕" : isAlgebraicDomain ? "∿" : isBatchDomain ? "⋯" : "⚗"}</span> {isTopologyDomain ? "Generate Manifold" : isKnotDomain ? "Generate Knot" : isCircuitDomain ? "Analyse Circuit" : isAlgebraicDomain ? "Extract Variety" : isBatchDomain ? `Generate ${batchSamples} Random Graphs` : "Discover Structure"}</>
+                <><span>{isTopologyDomain ? "◎" : isKnotDomain ? "∞" : isCircuitDomain ? "⊕" : isAlgebraicDomain ? "∿" : isBatchDomain ? "⋯" : isTDADomain ? "⧖" : "⚗"}</span> {isTopologyDomain ? "Generate Manifold" : isKnotDomain ? "Generate Knot" : isCircuitDomain ? "Analyse Circuit" : isAlgebraicDomain ? "Extract Variety" : isBatchDomain ? `Generate ${batchSamples} Random Graphs` : isTDADomain ? "Compute Homology" : "Discover Structure"}</>
               )}
             </button>
 
             {/* Structure Microscope */}
             <section style={{ flexShrink: 0, minHeight: 400 }}>
-              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} circuitResult={circuitResult} algebraicResult={algebraicResult} batchData={batchData} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain || isCircuitDomain || isAlgebraicDomain || isBatchDomain ? undefined : handleEdgeRemove} onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
+              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} circuitResult={circuitResult} algebraicResult={algebraicResult} batchData={batchData} tdaResult={tdaResult} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain || isCircuitDomain || isAlgebraicDomain || isBatchDomain || isTDADomain ? undefined : handleEdgeRemove} onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
             </section>
           </main>
 
