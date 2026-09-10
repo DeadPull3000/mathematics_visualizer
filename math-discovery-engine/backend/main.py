@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
-from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse, CircuitRequest, CircuitResponse, AlgebraicRequest, AlgebraicResponse, BatchRequest, BatchResponse, TDARequest, TDAResponse
+from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse, CircuitRequest, CircuitResponse, AlgebraicRequest, AlgebraicResponse, BatchRequest, BatchResponse, TDARequest, TDAResponse, WLRequest, WLResponse
 from parsers import parse_edge_list, parse_formula, parse_json
 from topology import compute_spectral_topology, compute_betti_numbers
 from ml_engine import compute_gradient_saliency
@@ -34,6 +34,7 @@ from complexity import parse_boolean_circuit
 from algebraic import generate_algebraic_variety
 from batch import generate_batch_data
 from tda import process_tda
+from wl_test import compute_wl_test
 import re
 
 # --- Logging ------------------------------------------------------------------
@@ -509,4 +510,62 @@ async def api_process_tda(payload: TDARequest) -> TDAResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"TDA computation error: {exc}",
+        ) from exc
+
+
+@app.post(
+    "/api/process-wl",
+    response_model=WLResponse,
+    summary="Compute 1-Weisfeiler-Lehman Test",
+    status_code=status.HTTP_200_OK,
+    tags=["Graph Theory"],
+)
+async def process_wl(payload: WLRequest) -> WLResponse:
+    """
+    Accepts two graphs (formula or edge list), computes WL coloring steps, and
+    determines if they are possibly isomorphic.
+    """
+    def parse_graph(text: str):
+        try:
+            return parse_formula(text)
+        except Exception:
+            try:
+                return parse_edge_list(text)
+            except Exception as e:
+                raise ValueError(f"Could not parse as formula or edge list: {text}") from e
+                
+    try:
+        G1 = parse_graph(payload.formula1)
+        G2 = parse_graph(payload.formula2)
+        
+        steps1, steps2, is_isomorphic = compute_wl_test(G1, G2)
+        
+        # Format nodes and edges
+        # G1
+        nodes1 = [{"id": n} for n in G1.nodes()]
+        edges1 = [[u, v] for u, v in G1.edges()]
+        
+        # G2
+        nodes2 = [{"id": n} for n in G2.nodes()]
+        edges2 = [[u, v] for u, v in G2.edges()]
+        
+        return WLResponse(
+            graph1_nodes=nodes1,
+            graph1_edges=edges1,
+            graph2_nodes=nodes2,
+            graph2_edges=edges2,
+            wl_steps1=steps1,
+            wl_steps2=steps2,
+            is_isomorphic=is_isomorphic
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc)
+        ) from exc
+    except Exception as exc:
+        log.exception("WL computation failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"WL computation error: {exc}",
         ) from exc
