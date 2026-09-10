@@ -101,6 +101,8 @@ export interface GraphVisualizerProps {
    * Used for Gate Types (spectral) colouring when domain === "circuit".
    */
   gateTypes?: Record<string, string>;
+  /** WL step color IDs map — maps stringified node ID → integer color ID. */
+  wlColors?: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,9 +152,12 @@ function GraphVisualizerInner({
   onNodeRemove,
   domain,
   gateTypes = {},
+  wlColors,
 }: GraphVisualizerProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ForceGraph3D = (ForceGraph3DComponent as any);
+
+  const PALETTE = ["#E6E4DF", "#C05640", "#6B8075", "#D19E4A", "#888C8E", "#4A5D23", "#9B4F4F", "#C4A484", "#2C3133", "#5C7A89"];
 
   const isCircuitMode = domain === "circuit";
   // Is the visualiser rendering a parametric knot / manifold (fixed coords)?
@@ -225,7 +230,11 @@ function GraphVisualizerInner({
       let label: string;
       const score = saliencyScores[key] ?? 0;
 
-      if (isCircuitMode) {
+      if (wlColors) {
+        const wlId = wlColors[key] ?? 0;
+        color = PALETTE[wlId % PALETTE.length];
+        label = `Node ${key} | WL Color: ${wlId}`;
+      } else if (isCircuitMode) {
         const gateType = gateTypes[key] ?? "VAR";
         if (viewMode === "saliency") {
           // Critical Path colouring: 1.0 = Terracotta, 0.2 = dark Chalkboard
@@ -279,7 +288,7 @@ function GraphVisualizerInner({
     }));
 
     return { nodes: nodeObjs, links: [...activeLinks, ...ghostLinks] };
-  }, [isKnotMode, isCircuitMode, knotNodes, nodes, edges, deletedEdges, fiedlerVector, saliencyScores, gateTypes, viewMode, harmonics]);
+  }, [isKnotMode, isCircuitMode, knotNodes, nodes, edges, deletedEdges, fiedlerVector, saliencyScores, gateTypes, viewMode, harmonics, wlColors]);
 
   // ── Zero-out ghost link force after graphData changes ───────────────────
   useEffect(() => {
@@ -374,7 +383,9 @@ function GraphVisualizerInner({
         nodeColor={(n: FGNode) => n.color}
         nodeLabel={(n: FGNode) => n.label}
         nodeRelSize={
-          isCircuitMode
+          wlColors
+            ? 6
+            : isCircuitMode
             ? 5                                                       // circuit: uniform base size
             : isManifoldMode
             ? 2                                                       // manifold: tiny uniform spheres

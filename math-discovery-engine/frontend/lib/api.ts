@@ -653,3 +653,48 @@ export async function processTDA(request: TDARequest): Promise<TDAResponse> {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Graph Theory — Weisfeiler-Lehman Isomorphism Test
+// ---------------------------------------------------------------------------
+
+/** Request body for POST /api/process-wl */
+export interface WLRequest {
+  /** First graph formula or edge list. */
+  formula1: string;
+  /** Second graph formula or edge list. */
+  formula2: string;
+}
+
+/** Response from POST /api/process-wl */
+export interface WLResponse {
+  /** Nodes for the first graph. */
+  graph1_nodes: { id: string | number; fx?: number; fy?: number; fz?: number }[];
+  /** Edges for the first graph. */
+  graph1_edges: [string | number, string | number][];
+  /** Nodes for the second graph. */
+  graph2_nodes: { id: string | number; fx?: number; fy?: number; fz?: number }[];
+  /** Edges for the second graph. */
+  graph2_edges: [string | number, string | number][];
+  /** Color step progression for the first graph. Maps node ID to color ID. */
+  wl_steps1: Record<string, number>[];
+  /** Color step progression for the second graph. Maps node ID to color ID. */
+  wl_steps2: Record<string, number>[];
+  /** True if the WL test could not distinguish the graphs (possibly isomorphic). */
+  is_isomorphic: boolean;
+}
+
+/**
+ * Send two graphs to the backend to compute their 1-Weisfeiler-Lehman colorings.
+ *
+ * @param request  A WLRequest with two graph formulas/edge lists.
+ *
+ * @example
+ * const result = await processWL({ formula1: "C_6", formula2: "P_6" });
+ */
+export async function processWL(request: WLRequest): Promise<WLResponse> {
+  return apiFetch<WLResponse>("/api/process-wl", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+

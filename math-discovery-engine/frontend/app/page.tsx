@@ -49,6 +49,9 @@ import {
   type BatchDataPoint,
   type TDARequest,
   type TDAResponse,
+  processWL,
+  type WLRequest,
+  type WLResponse,
   ApiError,
 } from "@/lib/api";
 import GraphVisualizer from "@/components/GraphVisualizer";
@@ -139,6 +142,15 @@ const DOMAINS: Domain[] = [
     defaultRawData: "noisy_circle",
     color: "#C05640",
   },
+  {
+    id: "wl_test",
+    label: "Graph Isomorphism (WL Test)",
+    subtitle: "The Twin Test",
+    icon: "⋍",
+    defaultInputType: "formula",
+    defaultRawData: "",
+    color: "#D19E4A",
+  },
 ];
 
 function Sidebar({
@@ -174,7 +186,7 @@ function Sidebar({
 
       {DOMAINS.map((d) => {
         const isActive = d.id === selected.id;
-        const isLive = d.id === "combinatorics" || d.id === "knot" || d.id === "topology" || d.id === "circuit" || d.id === "algebraic-geometry" || d.id === "batch-explorer" || d.id === "tda";
+        const isLive = d.id === "combinatorics" || d.id === "knot" || d.id === "topology" || d.id === "circuit" || d.id === "algebraic-geometry" || d.id === "batch-explorer" || d.id === "tda" || d.id === "wl_test";
         return (
           <button
             key={d.id}
@@ -564,6 +576,55 @@ function TDADropzone({
         <span style={{ color: "#6B8075" }}>H₀</span> connected clusters
         {"  ·  "}
         <span style={{ color: "#C05640" }}>H₁</span> persistent 1D loops
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// WLDropzone — Two textareas for the Graph Isomorphism twin test
+// ---------------------------------------------------------------------------
+
+function WLDropzone({
+  domain,
+  formula1, setFormula1,
+  formula2, setFormula2,
+}: {
+  domain: Domain;
+  formula1: string; setFormula1: (v: string) => void;
+  formula2: string; setFormula2: (v: string) => void;
+}) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Graph A</div>
+        <textarea
+          value={formula1} onChange={(e) => setFormula1(e.target.value)}
+          placeholder="E.g., C_6 or paste an edge list"
+          style={{
+            minHeight: 120, background: "#111315", border: "1px solid #2C3133",
+            borderRadius: 8, color: "#E6E4DF", padding: "12px 14px",
+            fontFamily: "'Courier New', monospace", fontSize: 13,
+            outline: "none", resize: "vertical", transition: "border-color 0.2s"
+          }}
+          onFocus={(e) => { e.target.style.borderColor = domain.color; }}
+          onBlur={(e) => { e.target.style.borderColor = "#2C3133"; }}
+        />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Graph B</div>
+        <textarea
+          value={formula2} onChange={(e) => setFormula2(e.target.value)}
+          placeholder="E.g., C_6 or paste an edge list"
+          style={{
+            minHeight: 120, background: "#111315", border: "1px solid #2C3133",
+            borderRadius: 8, color: "#E6E4DF", padding: "12px 14px",
+            fontFamily: "'Courier New', monospace", fontSize: 13,
+            outline: "none", resize: "vertical", transition: "border-color 0.2s"
+          }}
+          onFocus={(e) => { e.target.style.borderColor = domain.color; }}
+          onBlur={(e) => { e.target.style.borderColor = "#2C3133"; }}
+        />
       </div>
     </div>
   );
@@ -1897,6 +1958,67 @@ function TDAResultView({
   );
 }
 
+// ---------------------------------------------------------------------------
+// WLResultView — Twin Test (Weisfeiler-Lehman Isomorphism Test)
+// ---------------------------------------------------------------------------
+
+function WLResultView({
+  wlResult,
+  wlStep,
+  setWlStep,
+}: {
+  wlResult: WLResponse;
+  wlStep: number;
+  setWlStep: (s: number) => void;
+}) {
+  const maxSteps = wlResult.wl_steps1.length - 1;
+  const isIsomorphic = wlResult.is_isomorphic;
+
+  return (
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Badge */}
+      <div style={{ background: isIsomorphic ? "#6B807520" : "#C0564020", border: `1px solid ${isIsomorphic ? "#6B8075" : "#C05640"}`, borderRadius: 10, padding: "16px 20px", textAlign: "center" }}>
+        <div style={{ color: isIsomorphic ? "#6B8075" : "#C05640", fontSize: 20, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          Result: {isIsomorphic ? "ISOMORPHIC (Mathematical Twins)" : "NON-ISOMORPHIC"}
+        </div>
+      </div>
+
+      {/* Split-screen graphs */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
+          <div style={{ color: "#888C8E", fontSize: 10, marginBottom: 10, textAlign: "center", textTransform: "uppercase", letterSpacing: "0.08em" }}>Graph A</div>
+          <GraphVisualizer
+            nodes={wlResult.graph1_nodes.map(n => n.id)}
+            edges={wlResult.graph1_edges as (string | number)[][]}
+            wlColors={wlResult.wl_steps1[wlStep]}
+            viewMode="spectral"
+            height={300}
+          />
+        </div>
+        <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
+          <div style={{ color: "#888C8E", fontSize: 10, marginBottom: 10, textAlign: "center", textTransform: "uppercase", letterSpacing: "0.08em" }}>Graph B</div>
+          <GraphVisualizer
+            nodes={wlResult.graph2_nodes.map(n => n.id)}
+            edges={wlResult.graph2_edges as (string | number)[][]}
+            wlColors={wlResult.wl_steps2[wlStep]}
+            viewMode="spectral"
+            height={300}
+          />
+        </div>
+      </div>
+
+      {/* Playback Control */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 20px" }}>
+        <div style={{ color: "#E6E4DF", fontSize: 13, fontWeight: 600 }}>WL Iteration Step: <span style={{ color: "#D19E4A" }}>{wlStep}</span> of {maxSteps}</div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={() => setWlStep(0)} disabled={wlStep === 0} style={{ background: "#2C3133", border: "none", borderRadius: 6, color: wlStep === 0 ? "#555A5D" : "#E6E4DF", padding: "6px 14px", cursor: wlStep === 0 ? "not-allowed" : "pointer", transition: "all 0.15s" }}>Reset</button>
+          <button onClick={() => setWlStep(wlStep + 1)} disabled={wlStep >= maxSteps} style={{ background: wlStep >= maxSteps ? "#2C3133" : "#D19E4A", border: "none", borderRadius: 6, color: wlStep >= maxSteps ? "#555A5D" : "#111315", padding: "6px 14px", fontWeight: 600, cursor: wlStep >= maxSteps ? "not-allowed" : "pointer", transition: "all 0.15s" }}>Next Iteration</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Microscope({
   result,
   knotResult,
@@ -1921,6 +2043,9 @@ function Microscope({
   algebraicResult: AlgebraicResponse | null;
   batchData: BatchDataPoint[] | null;
   tdaResult: TDAResponse | null;
+  wlResult: WLResponse | null;
+  wlStep: number;
+  setWlStep: (s: number) => void;
   domain: Domain;
   error: string | null;
   viewMode: "spectral" | "saliency";
@@ -1936,17 +2061,18 @@ function Microscope({
   const isAlgebraicDomain = domain.id === "algebraic-geometry";
   const isBatchDomain = domain.id === "batch-explorer";
   const isTDADomain = domain.id === "tda";
-  const hasResult = !!(result || knotResult || manifoldResult || circuitResult || algebraicResult || batchData || tdaResult);
+  const isWLDomain = domain.id === "wl_test";
+  const hasResult = !!(result || knotResult || manifoldResult || circuitResult || algebraicResult || batchData || tdaResult || wlResult);
   return (
     <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 400 }}>
       <div style={{ padding: "12px 18px", borderBottom: "1px solid #2C3133", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ color: domain.color, fontSize: 14 }}>◉</span>
           <span style={{ color: "#E6E4DF", fontSize: 12, fontWeight: 600, letterSpacing: "0.06em" }}>
-            {isBatchDomain ? "BATCH ANALYSIS" : "STRUCTURE MICROSCOPE"}
+            {isBatchDomain ? "BATCH ANALYSIS" : isWLDomain ? "TWIN TEST RESULTS" : "STRUCTURE MICROSCOPE"}
           </span>
         </div>
-        {result && !isKnotDomain && !isTopooDomain && !isCircuitDomain && !isAlgebraicDomain && !isBatchDomain && !isTDADomain && (
+        {result && !isKnotDomain && !isTopooDomain && !isCircuitDomain && !isAlgebraicDomain && !isBatchDomain && !isTDADomain && !isWLDomain && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ background: "#6B807520", border: "1px solid #6B8075", color: "#6B8075", borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
               {result.metadata.num_nodes}V · {result.metadata.num_edges}E
@@ -1987,6 +2113,11 @@ function Microscope({
         {tdaResult && isTDADomain && (
           <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
             TDA · {tdaResult.nodes.length} pts · H₁: {tdaResult.barcodes.H1.length} loops
+          </span>
+        )}
+        {wlResult && isWLDomain && (
+          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
+            Twin Test
           </span>
         )}
       </div>
@@ -2030,6 +2161,12 @@ function Microscope({
         ) : isTDADomain ? (
           tdaResult ? (
             <TDAResultView tdaResult={tdaResult} domain={domain} />
+          ) : (
+            <EmptyMicroscope domain={domain} />
+          )
+        ) : isWLDomain ? (
+          wlResult ? (
+            <WLResultView wlResult={wlResult} wlStep={wlStep} setWlStep={setWlStep} />
           ) : (
             <EmptyMicroscope domain={domain} />
           )
@@ -2255,6 +2392,11 @@ export default function HomePage() {
   const [tdaShape, setTdaShape] = useState<"noisy_circle" | "noisy_sphere" | "random_noise">("noisy_circle");
   const [tdaNumPoints, setTdaNumPoints] = useState(150);
   const [tdaNoiseLevel, setTdaNoiseLevel] = useState(0.15);
+  // wlResult: results from the Weisfeiler-Lehman Graph Isomorphism test.
+  const [wlResult, setWLResult] = useState<WLResponse | null>(null);
+  const [wlFormula1, setWLFormula1] = useState("C_6");
+  const [wlFormula2, setWLFormula2] = useState("0 1\n1 2\n2 3\n3 4\n4 5\n5 0");
+  const [wlStep, setWlStep] = useState(0);
 
   const activeDomain = selectedDomain.id;
   const isKnotDomain = activeDomain === "knot";
@@ -2263,6 +2405,7 @@ export default function HomePage() {
   const isAlgebraicDomain = activeDomain === "algebraic-geometry";
   const isBatchDomain = activeDomain === "batch-explorer";
   const isTDADomain = activeDomain === "tda";
+  const isWLDomain = activeDomain === "wl_test";
 
   // Clear results when switching domain
   const handleDomainSelect = useCallback((d: Domain) => {
@@ -2274,6 +2417,7 @@ export default function HomePage() {
     setAlgebraicResult(null);
     setBatchData(null);
     setTDAResult(null);
+    setWLResult(null);
     setError(null);
     setHistory([]);
     setDeletedEdges([]);
@@ -2289,6 +2433,7 @@ export default function HomePage() {
     setAlgebraicResult(null);
     setBatchData(null);
     setTDAResult(null);
+    setWLResult(null);
     setError(null);
   }, [selectedDomain]);
 
@@ -2298,7 +2443,7 @@ export default function HomePage() {
   }, []);
 
   const handleDiscover = useCallback(async () => {
-    setIsLoading(true); setError(null); setResult(null); setKnotResult(null); setManifoldResult(null); setCircuitResult(null); setAlgebraicResult(null); setTDAResult(null);
+    setIsLoading(true); setError(null); setResult(null); setKnotResult(null); setManifoldResult(null); setCircuitResult(null); setAlgebraicResult(null); setTDAResult(null); setWLResult(null);
 
     // ── Topology domain (Surfaces & Manifolds) ────────────────────────────────
     if (isTopologyDomain) {
@@ -2420,6 +2565,30 @@ export default function HomePage() {
       return;
     }
 
+    // ── Weisfeiler-Lehman Graph Isomorphism ──────────────────────────────────
+    if (isWLDomain) {
+      try {
+        const response = await processWL({
+          formula1: wlFormula1,
+          formula2: wlFormula2,
+        });
+        setWLResult(response);
+        setWlStep(0);
+        setHistory([{
+          id: Date.now().toString(),
+          type: "genesis",
+          detail: `Twin Test: Graph A vs Graph B`,
+        }]);
+      } catch (err) {
+        let msg: string;
+        if (err instanceof ApiError) msg = err.detail;
+        else if (err instanceof Error) msg = err.message;
+        else msg = String(err);
+        setError(msg);
+      } finally { setIsLoading(false); }
+      return;
+    }
+
     // ── Combinatorics / other graph domains ────────────────────────────────
     try {
       let inputType: InputType;
@@ -2453,7 +2622,7 @@ export default function HomePage() {
       }
       setError(msg);
     } finally { setIsLoading(false); }
-  }, [isTopologyDomain, manifoldShape, deformation, exprX, exprY, exprZ, uMin, uMax, vMin, vMax, isKnotDomain, knotFormula, isCircuitDomain, circuitFormula, isAlgebraicDomain, algebraicFormula, isBatchDomain, batchSamples, isTDADomain, tdaShape, tdaNumPoints, tdaNoiseLevel, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
+  }, [isTopologyDomain, manifoldShape, deformation, exprX, exprY, exprZ, uMin, uMax, vMin, vMax, isKnotDomain, knotFormula, isCircuitDomain, circuitFormula, isAlgebraicDomain, algebraicFormula, isBatchDomain, batchSamples, isTDADomain, tdaShape, tdaNumPoints, tdaNoiseLevel, isWLDomain, wlFormula1, wlFormula2, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
 
   /** handleBatchGenerate — called by the Batch Explorer "generate" button. */
   const handleBatchGenerate = useCallback(async (n: number) => {
@@ -2622,10 +2791,10 @@ export default function HomePage() {
             <section style={{ flexShrink: 0, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: 280 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                  {isTopologyDomain ? "◎ Manifold Shape" : isKnotDomain ? "∞ Knot Formula" : isCircuitDomain ? "⊕ Boolean Circuit" : isAlgebraicDomain ? "∿ Implicit Polynomial" : isBatchDomain ? "⋯ Batch Configuration" : isTDADomain ? "⧖ Point Cloud & Filtration" : "⬆ Input / Data Source"}
+                  {isTopologyDomain ? "◎ Manifold Shape" : isKnotDomain ? "∞ Knot Formula" : isCircuitDomain ? "⊕ Boolean Circuit" : isAlgebraicDomain ? "∿ Implicit Polynomial" : isBatchDomain ? "⋯ Batch Configuration" : isTDADomain ? "⧖ Point Cloud & Filtration" : isWLDomain ? "⋍ Graph Twins" : "⬆ Input / Data Source"}
                 </span>
                 <span style={{ color: "#888C8E", fontSize: 10 }}>
-                  {isTopologyDomain ? "Parametric mesh · Laplacian harmonics" : isKnotDomain ? "Torus knot parametric engine" : isCircuitDomain ? "AST parser · DAG · Critical path" : isAlgebraicDomain ? "Marching Cubes · Singularity scores" : isBatchDomain ? "Erdős-Rényi · G(N, p) random ensemble" : isTDADomain ? "Vietoris-Rips filtration · H₀ & H₁ barcodes" : "All parsing is performed server-side"}
+                  {isTopologyDomain ? "Parametric mesh · Laplacian harmonics" : isKnotDomain ? "Torus knot parametric engine" : isCircuitDomain ? "AST parser · DAG · Critical path" : isAlgebraicDomain ? "Marching Cubes · Singularity scores" : isBatchDomain ? "Erdős-Rényi · G(N, p) random ensemble" : isTDADomain ? "Vietoris-Rips filtration · H₀ & H₁ barcodes" : isWLDomain ? "Weisfeiler-Lehman Graph Isomorphism" : "All parsing is performed server-side"}
                 </span>
               </div>
               {isTopologyDomain ? (
@@ -2724,6 +2893,12 @@ export default function HomePage() {
                   onCompute={handleDiscover}
                   isLoading={isLoading}
                 />
+              ) : isWLDomain ? (
+                <WLDropzone
+                  domain={selectedDomain}
+                  formula1={wlFormula1} setFormula1={setWLFormula1}
+                  formula2={wlFormula2} setFormula2={setWLFormula2}
+                />
               ) : (
                 <Dropzone
                   domain={selectedDomain}
@@ -2740,30 +2915,31 @@ export default function HomePage() {
             <button
               id="discover-btn"
               onClick={isBatchDomain ? () => handleBatchGenerate(batchSamples) : handleDiscover}
-              disabled={isLoading}
+              disabled={isLoading || (isTDADomain && !!tdaResult)}
               style={{
-                background: isLoading ? "#2C3133" : `linear-gradient(135deg, ${selectedDomain.color}, ${selectedDomain.color}cc)`,
+                background: isLoading || (isTDADomain && !!tdaResult) ? "#2C3133" : `linear-gradient(135deg, ${selectedDomain.color}, ${selectedDomain.color}cc)`,
                 border: "none", borderRadius: 10,
-                color: isLoading ? "#888C8E" : "#E6E4DF",
-                cursor: isLoading ? "not-allowed" : "pointer",
+                color: isLoading || (isTDADomain && !!tdaResult) ? "#888C8E" : "#E6E4DF",
+                cursor: isLoading || (isTDADomain && !!tdaResult) ? "not-allowed" : "pointer",
                 fontSize: 14, fontWeight: 600, letterSpacing: "0.06em",
                 padding: "16px 24px", transition: "all 0.2s ease",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 gap: 10, textTransform: "uppercase", flexShrink: 0,
+                display: isTDADomain ? "none" : "flex",
               }}
-              onMouseEnter={(e) => { if (!isLoading) (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
+              onMouseEnter={(e) => { if (!isLoading && !(isTDADomain && !!tdaResult)) (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)"; }}
+              onMouseLeave={(e) => { if (!(isTDADomain && !!tdaResult)) (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
             >
               {isLoading ? (
-                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isTopologyDomain ? "Generating Mesh…" : isKnotDomain ? "Generating Knot…" : isCircuitDomain ? "Parsing Circuit…" : isAlgebraicDomain ? "Tracing Variety…" : isBatchDomain ? `Sampling ${batchSamples} Graphs…` : isTDADomain ? "Computing Homology…" : "Computing Invariants…"}</>
+                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isTopologyDomain ? "Generating Mesh…" : isKnotDomain ? "Generating Knot…" : isCircuitDomain ? "Parsing Circuit…" : isAlgebraicDomain ? "Tracing Variety…" : isBatchDomain ? `Sampling ${batchSamples} Graphs…` : isTDADomain ? "Computing Homology…" : isWLDomain ? "Testing Twins…" : "Computing Invariants…"}</>
               ) : (
-                <><span>{isTopologyDomain ? "◎" : isKnotDomain ? "∞" : isCircuitDomain ? "⊕" : isAlgebraicDomain ? "∿" : isBatchDomain ? "⋯" : isTDADomain ? "⧖" : "⚗"}</span> {isTopologyDomain ? "Generate Manifold" : isKnotDomain ? "Generate Knot" : isCircuitDomain ? "Analyse Circuit" : isAlgebraicDomain ? "Extract Variety" : isBatchDomain ? `Generate ${batchSamples} Random Graphs` : isTDADomain ? "Compute Homology" : "Discover Structure"}</>
+                <><span>{isTopologyDomain ? "◎" : isKnotDomain ? "∞" : isCircuitDomain ? "⊕" : isAlgebraicDomain ? "∿" : isBatchDomain ? "⋯" : isTDADomain ? "⧖" : isWLDomain ? "⋍" : "⚗"}</span> {isTopologyDomain ? "Generate Manifold" : isKnotDomain ? "Generate Knot" : isCircuitDomain ? "Analyse Circuit" : isAlgebraicDomain ? "Extract Variety" : isBatchDomain ? `Generate ${batchSamples} Random Graphs` : isTDADomain ? "Compute Homology" : isWLDomain ? "Run Twin Test" : "Discover Structure"}</>
               )}
             </button>
 
             {/* Structure Microscope */}
             <section style={{ flexShrink: 0, minHeight: 400 }}>
-              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} circuitResult={circuitResult} algebraicResult={algebraicResult} batchData={batchData} tdaResult={tdaResult} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain || isCircuitDomain || isAlgebraicDomain || isBatchDomain || isTDADomain ? undefined : handleEdgeRemove} onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
+              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} circuitResult={circuitResult} algebraicResult={algebraicResult} batchData={batchData} tdaResult={tdaResult} wlResult={wlResult} wlStep={wlStep} setWlStep={setWlStep} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain || isCircuitDomain || isAlgebraicDomain || isBatchDomain || isTDADomain || isWLDomain ? undefined : handleEdgeRemove} onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
             </section>
           </main>
 
