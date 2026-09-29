@@ -52,6 +52,9 @@ import {
   processWL,
   type WLRequest,
   type WLResponse,
+  processOracle,
+  type OracleRequest,
+  type OracleResponse,
   ApiError,
 } from "@/lib/api";
 import GraphVisualizer from "@/components/GraphVisualizer";
@@ -2030,6 +2033,7 @@ function Microscope({
   wlResult,
   wlStep,
   setWlStep,
+  conjectures,
   domain,
   error,
   viewMode,
@@ -2049,6 +2053,7 @@ function Microscope({
   wlResult: WLResponse | null;
   wlStep: number;
   setWlStep: (s: number) => void;
+  conjectures: string[] | null;
   domain: Domain;
   error: string | null;
   viewMode: "spectral" | "saliency";
@@ -2157,7 +2162,58 @@ function Microscope({
           )
         ) : isBatchDomain ? (
           batchData ? (
-            <BatchVisualizer data={batchData} />
+            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* Conjectures card — rendered when Oracle has run */}
+              {conjectures && conjectures.length > 0 && (
+                <div style={{
+                  background: "linear-gradient(135deg, #D19E4A08, #D19E4A04)",
+                  border: "1px solid #D19E4A55",
+                  borderRadius: 12,
+                  padding: "20px 24px",
+                  boxShadow: "0 0 40px #D19E4A18, inset 0 1px 0 #D19E4A22",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                    <span style={{ fontSize: 18 }}>🔮</span>
+                    <span style={{ color: "#D19E4A", fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+                      Discovered Theorems
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: "linear-gradient(to right, #D19E4A44, transparent)" }} />
+                    <span style={{ color: "#D19E4A66", fontSize: 9, letterSpacing: "0.08em" }}>SVD · Null Space Analysis</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {conjectures.map((c, i) => (
+                      <div key={i} style={{
+                        background: "#D19E4A0A",
+                        border: "1px solid #D19E4A33",
+                        borderRadius: 8,
+                        padding: "14px 18px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 16,
+                      }}>
+                        <span style={{ color: "#D19E4A55", fontSize: 10, fontWeight: 700, fontFamily: "'Courier New', monospace", flexShrink: 0 }}>
+                          Thm {(i + 1).toString().padStart(2, "0")}
+                        </span>
+                        <span style={{
+                          color: "#E6E4DF",
+                          fontFamily: "'Courier New', monospace",
+                          fontSize: 15,
+                          fontWeight: 600,
+                          letterSpacing: "0.04em",
+                          wordBreak: "break-all",
+                        }}>
+                          {c}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 14, color: "#888C8E55", fontSize: 9, letterSpacing: "0.06em", textAlign: "right" }}>
+                    Derived from {batchData.length} graph samples via Singular Value Decomposition
+                  </div>
+                </div>
+              )}
+              <BatchVisualizer data={batchData} />
+            </div>
           ) : (
             <EmptyMicroscope domain={domain} />
           )
@@ -2390,6 +2446,9 @@ export default function HomePage() {
   // batchData: results from the Batch Dataset Explorer.
   const [batchData, setBatchData] = useState<BatchDataPoint[] | null>(null);
   const [batchSamples, setBatchSamples] = useState(100);
+  // Oracle: discovered conjectures from SVD null-space analysis.
+  const [conjectures, setConjectures] = useState<string[] | null>(null);
+  const [isThinking, setIsThinking] = useState(false);
   // tdaResult: results from the Topological Data Analysis (Persistent Homology) engine.
   const [tdaResult, setTDAResult] = useState<TDAResponse | null>(null);
   const [tdaShape, setTdaShape] = useState<"noisy_circle" | "noisy_sphere" | "random_noise">("noisy_circle");
@@ -2629,7 +2688,7 @@ export default function HomePage() {
 
   /** handleBatchGenerate — called by the Batch Explorer "generate" button. */
   const handleBatchGenerate = useCallback(async (n: number) => {
-    setIsLoading(true); setError(null); setBatchData(null);
+    setIsLoading(true); setError(null); setBatchData(null); setConjectures(null);
     try {
       const response = await processBatch({ num_samples: n });
       setBatchData(response.data);
@@ -2642,6 +2701,22 @@ export default function HomePage() {
       setError(msg);
     } finally { setIsLoading(false); }
   }, []);
+
+  /** handleOracle — sends batch data to the SVD Conjecture Oracle. */
+  const handleOracle = useCallback(async () => {
+    if (!batchData || batchData.length === 0) return;
+    setIsThinking(true); setConjectures(null);
+    try {
+      const response = await processOracle({ batch_data: batchData as unknown as Record<string, number>[] });
+      setConjectures(response.conjectures);
+    } catch (err) {
+      let msg: string;
+      if (err instanceof ApiError) msg = err.detail;
+      else if (err instanceof Error) msg = err.message;
+      else msg = String(err);
+      setError(msg);
+    } finally { setIsThinking(false); }
+  }, [batchData]);
 
   /**
    * handleEdgeRemove — called by GraphVisualizer when the user clicks an edge.
@@ -2914,35 +2989,65 @@ export default function HomePage() {
               )}
             </section>
 
-            {/* Discover / Generate button */}
-            <button
-              id="discover-btn"
-              onClick={isBatchDomain ? () => handleBatchGenerate(batchSamples) : handleDiscover}
-              disabled={isLoading || (isTDADomain && !!tdaResult)}
-              style={{
-                background: isLoading || (isTDADomain && !!tdaResult) ? "#2C3133" : `linear-gradient(135deg, ${selectedDomain.color}, ${selectedDomain.color}cc)`,
-                border: "none", borderRadius: 10,
-                color: isLoading || (isTDADomain && !!tdaResult) ? "#888C8E" : "#E6E4DF",
-                cursor: isLoading || (isTDADomain && !!tdaResult) ? "not-allowed" : "pointer",
-                fontSize: 14, fontWeight: 600, letterSpacing: "0.06em",
-                padding: "16px 24px", transition: "all 0.2s ease",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                gap: 10, textTransform: "uppercase", flexShrink: 0,
-                display: isTDADomain ? "none" : "flex",
-              }}
-              onMouseEnter={(e) => { if (!isLoading && !(isTDADomain && !!tdaResult)) (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)"; }}
-              onMouseLeave={(e) => { if (!(isTDADomain && !!tdaResult)) (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
-            >
-              {isLoading ? (
-                <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isTopologyDomain ? "Generating Mesh…" : isKnotDomain ? "Generating Knot…" : isCircuitDomain ? "Parsing Circuit…" : isAlgebraicDomain ? "Tracing Variety…" : isBatchDomain ? `Sampling ${batchSamples} Graphs…` : isTDADomain ? "Computing Homology…" : isWLDomain ? "Testing Twins…" : "Computing Invariants…"}</>
-              ) : (
-                <><span>{isTopologyDomain ? "◎" : isKnotDomain ? "∞" : isCircuitDomain ? "⊕" : isAlgebraicDomain ? "∿" : isBatchDomain ? "⋯" : isTDADomain ? "⧖" : isWLDomain ? "⋍" : "⚗"}</span> {isTopologyDomain ? "Generate Manifold" : isKnotDomain ? "Generate Knot" : isCircuitDomain ? "Analyse Circuit" : isAlgebraicDomain ? "Extract Variety" : isBatchDomain ? `Generate ${batchSamples} Random Graphs` : isTDADomain ? "Compute Homology" : isWLDomain ? "Run Twin Test" : "Discover Structure"}</>
+            {/* Discover / Generate button row */}
+            <div style={{ display: "flex", gap: 12, flexShrink: 0 }}>
+              <button
+                id="discover-btn"
+                onClick={isBatchDomain ? () => handleBatchGenerate(batchSamples) : handleDiscover}
+                disabled={isLoading || (isTDADomain && !!tdaResult)}
+                style={{
+                  flex: 1,
+                  background: isLoading || (isTDADomain && !!tdaResult) ? "#2C3133" : `linear-gradient(135deg, ${selectedDomain.color}, ${selectedDomain.color}cc)`,
+                  border: "none", borderRadius: 10,
+                  color: isLoading || (isTDADomain && !!tdaResult) ? "#888C8E" : "#E6E4DF",
+                  cursor: isLoading || (isTDADomain && !!tdaResult) ? "not-allowed" : "pointer",
+                  fontSize: 14, fontWeight: 600, letterSpacing: "0.06em",
+                  padding: "16px 24px", transition: "all 0.2s ease",
+                  display: isTDADomain ? "none" : "flex", alignItems: "center", justifyContent: "center",
+                  gap: 10, textTransform: "uppercase",
+                }}
+                onMouseEnter={(e) => { if (!isLoading && !(isTDADomain && !!tdaResult)) (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)"; }}
+                onMouseLeave={(e) => { if (!(isTDADomain && !!tdaResult)) (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
+              >
+                {isLoading ? (
+                  <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isTopologyDomain ? "Generating Mesh…" : isKnotDomain ? "Generating Knot…" : isCircuitDomain ? "Parsing Circuit…" : isAlgebraicDomain ? "Tracing Variety…" : isBatchDomain ? `Sampling ${batchSamples} Graphs…` : isTDADomain ? "Computing Homology…" : isWLDomain ? "Testing Twins…" : "Computing Invariants…"}</>
+                ) : (
+                  <><span>{isTopologyDomain ? "◎" : isKnotDomain ? "∞" : isCircuitDomain ? "⊕" : isAlgebraicDomain ? "∿" : isBatchDomain ? "⋯" : isTDADomain ? "⧖" : isWLDomain ? "⋍" : "⚗"}</span> {isTopologyDomain ? "Generate Manifold" : isKnotDomain ? "Generate Knot" : isCircuitDomain ? "Analyse Circuit" : isAlgebraicDomain ? "Extract Variety" : isBatchDomain ? `Generate ${batchSamples} Random Graphs` : isTDADomain ? "Compute Homology" : isWLDomain ? "Run Twin Test" : "Discover Structure"}</>
+                )}
+              </button>
+
+              {/* Oracle button — only visible in Batch Explorer when data exists */}
+              {isBatchDomain && (
+                <button
+                  onClick={handleOracle}
+                  disabled={!batchData || isThinking}
+                  style={{
+                    background: !batchData || isThinking ? "#1C1F21" : "linear-gradient(135deg, #D19E4A22, #D19E4A11)",
+                    border: `1px solid ${!batchData || isThinking ? "#2C3133" : "#D19E4A"}`,
+                    borderRadius: 10, padding: "16px 22px",
+                    color: !batchData || isThinking ? "#555A5D" : "#D19E4A",
+                    cursor: !batchData || isThinking ? "not-allowed" : "pointer",
+                    fontSize: 13, fontWeight: 600, letterSpacing: "0.05em",
+                    display: "flex", alignItems: "center", gap: 8,
+                    whiteSpace: "nowrap", flexShrink: 0,
+                    transition: "all 0.25s ease",
+                    boxShadow: batchData && !isThinking ? "0 0 18px #D19E4A22" : "none",
+                  }}
+                  onMouseEnter={(e) => { if (batchData && !isThinking) { (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 0 32px #D19E4A44"; (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)"; } }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = batchData && !isThinking ? "0 0 18px #D19E4A22" : "none"; (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
+                >
+                  {isThinking ? (
+                    <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> Divining Laws…</>
+                  ) : (
+                    <>🔮 Generate Conjecture</>
+                  )}
+                </button>
               )}
-            </button>
+            </div>
 
             {/* Structure Microscope */}
             <section style={{ flexShrink: 0, minHeight: 400 }}>
-              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} circuitResult={circuitResult} algebraicResult={algebraicResult} batchData={batchData} tdaResult={tdaResult} wlResult={wlResult} wlStep={wlStep} setWlStep={setWlStep} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain || isCircuitDomain || isAlgebraicDomain || isBatchDomain || isTDADomain || isWLDomain ? undefined : handleEdgeRemove} onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
+              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} circuitResult={circuitResult} algebraicResult={algebraicResult} batchData={batchData} tdaResult={tdaResult} wlResult={wlResult} wlStep={wlStep} setWlStep={setWlStep} conjectures={conjectures} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain || isCircuitDomain || isAlgebraicDomain || isBatchDomain || isTDADomain || isWLDomain ? undefined : handleEdgeRemove} onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
             </section>
           </main>
 

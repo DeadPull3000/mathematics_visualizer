@@ -698,3 +698,35 @@ export async function processWL(request: WLRequest): Promise<WLResponse> {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Conjecture Oracle — SVD-based linear law discovery
+// ---------------------------------------------------------------------------
+
+/** Request body for POST /api/process-oracle */
+export interface OracleRequest {
+  /** The batch dataset of graph invariant dictionaries to analyse. */
+  batch_data: Record<string, number>[];
+}
+
+/** Response from POST /api/process-oracle */
+export interface OracleResponse {
+  /** List of discovered linear relationship strings, e.g. "1.0000 V - 1.0000 E - 1.0000 β₀ = 0". */
+  conjectures: string[];
+}
+
+/**
+ * Send a batch dataset to the Oracle engine to discover linear algebraic laws
+ * via Singular Value Decomposition (SVD) null-space analysis.
+ *
+ * @param request  An OracleRequest with `batch_data` — list of graph invariant dicts.
+ *
+ * @example
+ * const result = await processOracle({ batch_data: batchData });
+ */
+export async function processOracle(request: OracleRequest): Promise<OracleResponse> {
+  return apiFetch<OracleResponse>("/api/process-oracle", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
