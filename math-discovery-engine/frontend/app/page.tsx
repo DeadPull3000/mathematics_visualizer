@@ -1429,6 +1429,90 @@ function AlgebraicResultView({
           height={420}
         />
       </div>
+
+      {/* ── Exact Algebraic Analysis ── symbolic Jacobian + exact singularities */}
+      {(algebraicResult.jacobian || algebraicResult.exact_singularities) && (
+        <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0D1012", overflow: "hidden" }}>
+          {/* Panel header */}
+          <div style={{ padding: "12px 18px", borderBottom: "1px solid #2C3133", display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ color: domain.color, fontSize: 12 }}>∿</span>
+            <span style={{ color: "#E6E4DF", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              Exact Algebraic Analysis{" "}
+              <span style={{ color: "#555A5D", fontWeight: 400, textTransform: "none" }}>(Symbolic)</span>
+            </span>
+            <div style={{ flex: 1, height: 1, background: "linear-gradient(to right, #2C3133, transparent)" }} />
+            <span style={{ color: "#3A3F42", fontSize: 9, letterSpacing: "0.08em" }}>SymPy · Gröbner Basis</span>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+            {/* ── LEFT: Jacobian ── */}
+            <div style={{ padding: "18px 20px", borderRight: "1px solid #2C3133" }}>
+              <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14 }}>
+                The Jacobian (∇F)
+              </div>
+              {algebraicResult.jacobian && algebraicResult.jacobian.length === 3 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {(["x", "y", "z"] as const).map((axis, i) => (
+                    <div key={axis} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ color: "#555A5D", fontFamily: "'Georgia', serif", fontSize: 12, flexShrink: 0, width: 60 }}>
+                        ∂F/∂{axis} =
+                      </span>
+                      <code style={{
+                        color: "#E6E4DF",
+                        fontFamily: "'Courier New', monospace",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        background: "#1A1D1F",
+                        border: "1px solid #2C3133",
+                        borderRadius: 6,
+                        padding: "5px 10px",
+                        wordBreak: "break-all",
+                        lineHeight: 1.4,
+                      }}>
+                        {algebraicResult.jacobian[i]}
+                      </code>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <span style={{ color: "#3A3F42", fontSize: 11, fontStyle: "italic" }}>Not available</span>
+              )}
+            </div>
+
+            {/* ── RIGHT: Exact Singularities ── */}
+            <div style={{ padding: "18px 20px" }}>
+              <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14 }}>
+                Rigorous Singularities{" "}
+                <span style={{ color: "#3A3F42", textTransform: "none", letterSpacing: 0 }}>(F = ∇F = 0)</span>
+              </div>
+
+              {!algebraicResult.exact_singularities || algebraicResult.exact_singularities.length === 0 ? (
+                <p style={{ color: "#6B8075", fontFamily: "'Georgia', serif", fontSize: 12, lineHeight: 1.7, fontStyle: "italic", margin: 0 }}>
+                  Smooth Manifold. The Gröbner basis proves no real singularities exist.
+                </p>
+              ) : algebraicResult.exact_singularities[0]?.error ? (
+                <div style={{ color: "#888C8E", fontFamily: "'Courier New', monospace", fontSize: 11, lineHeight: 1.5, background: "#1A1D1F", border: "1px solid #2C3133", borderRadius: 6, padding: "10px 12px" }}>
+                  ⚠ {algebraicResult.exact_singularities[0].error}
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {algebraicResult.exact_singularities.map((sol, i) => (
+                    <div key={i} style={{ background: "#C0564008", border: "1px solid #C0564044", borderRadius: 7, padding: "9px 12px", display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ color: "#C0564066", fontSize: 9, fontWeight: 700, fontFamily: "'Courier New', monospace", flexShrink: 0 }}>
+                        P{(i + 1).toString().padStart(2, "0")}
+                      </span>
+                      <code style={{ color: "#C05640", fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 600 }}>
+                        ({["x", "y", "z"].map((v) => sol[v] ?? "?").join(", ")})
+                      </code>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

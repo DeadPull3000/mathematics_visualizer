@@ -540,6 +540,17 @@ export interface AlgebraicResponse {
    * indicating a singular point (cusp, node, pinch).
    */
   saliency_scores: Record<number, number>;
+  /**
+   * Symbolic Jacobian [∂F/∂x, ∂F/∂y, ∂F/∂z] as SymPy string expressions.
+   * e.g. ["2*x", "2*y", "-2*z"]
+   */
+  jacobian?: string[];
+  /**
+   * Exact symbolic singular points where F = 0 AND ∇F = 0.
+   * Each element maps variable names to exact symbolic values (e.g. "0", "sqrt(2)").
+   * May contain an `error` key if the system was too complex to solve in time.
+   */
+  exact_singularities?: Record<string, string>[];
 }
 
 /**
