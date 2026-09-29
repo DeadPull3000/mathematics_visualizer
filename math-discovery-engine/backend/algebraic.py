@@ -2,11 +2,43 @@ import numpy as np
 import numexpr as ne
 from skimage.measure import marching_cubes
 
+import sympy as sp
+import concurrent.futures
+
 def generate_algebraic_variety(formula: str, res: int = 30, bounds: float = 3.0) -> dict:
     """
     Evaluates an implicit polynomial equation F(x, y, z) = 0 and extracts its
     isosurface using the Marching Cubes algorithm.
     """
+    # --- EXACT SYMBOLIC COMPUTATION ---
+    jacobian_strs = []
+    exact_sings = []
+    
+    try:
+        x_sym, y_sym, z_sym = sp.symbols('x y z')
+        F = sp.sympify(formula)
+        Fx = sp.diff(F, x_sym)
+        Fy = sp.diff(F, y_sym)
+        Fz = sp.diff(F, z_sym)
+        
+        jacobian_strs = [str(Fx), str(Fy), str(Fz)]
+        
+        def solve_singularities():
+            return sp.solve([F, Fx, Fy, Fz], (x_sym, y_sym, z_sym), dict=True)
+            
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(solve_singularities)
+            # Timeout after 3 seconds to avoid blocking the server
+            sols = future.result(timeout=3.0)
+            
+        for sol in sols:
+            exact_sings.append({str(k): str(v) for k, v in sol.items()})
+    except concurrent.futures.TimeoutError:
+        exact_sings = [{"error": "System too complex for exact real-time solution"}]
+    except Exception as e:
+        exact_sings = [{"error": f"Symbolic computation failed: {str(e)}"}]
+    # ----------------------------------
+    
     # 1. Generate 3D grid
     x = np.linspace(-bounds, bounds, res)
     y = np.linspace(-bounds, bounds, res)
@@ -113,5 +145,7 @@ def generate_algebraic_variety(formula: str, res: int = 30, bounds: float = 3.0)
             "num_vertices": len(nodes),
             "num_faces": len(faces_list)
         },
-        "saliency_scores": saliency_scores
+        "saliency_scores": saliency_scores,
+        "jacobian": jacobian_strs,
+        "exact_singularities": exact_sings
     }

@@ -272,6 +272,8 @@ class AlgebraicResponse(BaseModel):
     edges: list[list[int]] = Field(..., description="List of [source, target] edge pairs")
     invariants: dict = Field(..., description="Invariants (num_vertices, num_faces)")
     saliency_scores: dict[int, float] = Field(..., description="Singularity Score mapping node ID to [0.0, 1.0]")
+    jacobian: list[str] = Field(default_factory=list, description="Symbolic Jacobian [Fx, Fy, Fz]")
+    exact_singularities: list[dict] = Field(default_factory=list, description="Exact symbolic singular points")
 
 class BatchRequest(BaseModel):
     """Payload for generating a batch of random graphs."""
