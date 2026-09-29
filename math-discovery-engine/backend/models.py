@@ -307,3 +307,9 @@ class WLResponse(BaseModel):
     wl_steps2: list[dict[Union[int, str], int]] = Field(..., description="WL color evolution for Graph 2")
     is_isomorphic: bool = Field(..., description="Whether the graphs are isomorphic according to the WL test")
 
+
+class OracleRequest(BaseModel):
+    batch_data: list[dict] = Field(..., description="List of graph invariants dictionaries")
+
+class OracleResponse(BaseModel):
+    conjectures: list[str] = Field(..., description="List of discovered linear relationships")

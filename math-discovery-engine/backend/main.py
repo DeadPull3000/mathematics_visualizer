@@ -24,7 +24,8 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
-from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse, CircuitRequest, CircuitResponse, AlgebraicRequest, AlgebraicResponse, BatchRequest, BatchResponse, TDARequest, TDAResponse, WLRequest, WLResponse
+from models import GraphMetadata, MathRequest, MathResponse, KnotRequest, KnotResponse, ManifoldRequest, ManifoldResponse, CircuitRequest, CircuitResponse, AlgebraicRequest, AlgebraicResponse, BatchRequest, BatchResponse, TDARequest, TDAResponse, WLRequest, WLResponse, OracleRequest, OracleResponse
+from oracle import discover_linear_laws
 from parsers import parse_edge_list, parse_formula, parse_json
 from topology import compute_spectral_topology, compute_betti_numbers
 from ml_engine import compute_gradient_saliency
@@ -568,4 +569,22 @@ async def process_wl(payload: WLRequest) -> WLResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"WL computation error: {exc}",
+        ) from exc
+
+@app.post(
+    "/api/process-oracle",
+    response_model=OracleResponse,
+    summary="Discover linear relationships using SVD",
+    status_code=status.HTTP_200_OK,
+    tags=["Oracle"],
+)
+async def process_oracle(payload: OracleRequest) -> OracleResponse:
+    try:
+        conjectures = discover_linear_laws(payload.batch_data)
+        return OracleResponse(conjectures=conjectures)
+    except Exception as exc:
+        log.exception("Oracle computation failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Oracle computation error: {exc}",
         ) from exc
