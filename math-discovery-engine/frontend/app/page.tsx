@@ -1,31 +1,6 @@
 "use client";
 
-/**
- * frontend/app/page.tsx  (Step 2 — Data Ingestion & Representation Layer)
- * -------------------------------------------------------------------------
- * Color palette: "Chalk, Slate, and Terracotta"
- *   #141617  Obsidian Slate  (primary background)
- *   #1C1F21  Chalkboard Grey (cards, panels)
- *   #E6E4DF  Warm Alabaster  (primary text)
- *   #888C8E  Faded Lead      (muted text, labels)
- *   #2C3133  Slate Joint     (borders, dividers)
- *   #C05640  Terracotta      (active accent, errors)
- *   #D19E4A  Aged Ochre      (symmetry accent)
- *   #6B8075  Faded Sage      (stable accent, success)
- *
- * Step 2 changes vs Step 1:
- *   - All client-side parsing removed. Raw text sent directly to backend.
- *   - New `formulaText` state for the Formula tab.
- *   - New `fileContent` state: FileReader reads JSON files as raw strings.
- *   - handleDiscover routes (input_type, raw_data) based on active tab.
- *   - ResultView renders MathResponse.metadata:
- *       num_nodes, num_edges, density, is_connected,
- *       num_connected_components, is_planar.
- *   - 1-skeleton preview uses circular layout (no longer needs spring coords).
- */
-
-import React, { useState, useRef, useCallback, useEffect } from "react";
-import { Download } from "lucide-react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   processObject,
   processKnot,
@@ -34,2457 +9,34 @@ import {
   processAlgebraic,
   processBatch,
   processTDA,
-  exportToPython,
+  processWL,
+  processOracle,
+  ApiError,
   type InputType,
-  type MathRequest,
   type MathResponse,
-  type TopologyMetadata,
   type KnotResponse,
-  type ManifoldRequest,
   type ManifoldResponse,
-  type CircuitRequest,
   type CircuitResponse,
-  type AlgebraicRequest,
   type AlgebraicResponse,
   type BatchDataPoint,
-  type TDARequest,
   type TDAResponse,
-  processWL,
-  type WLRequest,
   type WLResponse,
-  processOracle,
-  type OracleRequest,
-  type OracleResponse,
-  ApiError,
+  type ManifoldRequest,
 } from "@/lib/api";
-import GraphVisualizer from "@/components/GraphVisualizer";
-import BatchVisualizer from "@/components/BatchVisualizer";
-import BarcodeVisualizer from "@/components/BarcodeVisualizer";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type Domain = {
-  id: string;
-  label: string;
-  subtitle: string;
-  icon: string;
-  defaultInputType: InputType;
-  defaultRawData: string;
-  color: string;
-};
-
-type InputMode = "upload" | "paste" | "formula";
-
-// ---------------------------------------------------------------------------
-// Domain definitions
-// ---------------------------------------------------------------------------
-
-const DOMAINS: Domain[] = [
-  {
-    id: "topology",
-    label: "Topology",
-    subtitle: "Surfaces & Manifolds",
-    icon: "◎",
-    defaultInputType: "edge_list",
-    defaultRawData: "0 1\n1 2\n2 3\n3 0\n4 5\n5 6\n6 7\n7 4\n0 4\n1 5\n2 6\n3 7",
-    color: "#6B8075",
-  },
-  {
-    id: "combinatorics",
-    label: "Combinatorics",
-    subtitle: "Graphs & Networks",
-    icon: "⬡",
-    defaultInputType: "edge_list",
-    defaultRawData: "0 1\n1 2\n2 3\n3 4\n4 0\n0 2",
-    color: "#D19E4A",
-  },
-  {
-    id: "knot",
-    label: "Knot Theory",
-    subtitle: "Links & Tangles",
-    icon: "∞",
-    defaultInputType: "formula",
-    defaultRawData: "C_6",
-    color: "#C05640",
-  },
-  {
-    id: "circuit",
-    label: "Complexity Theory",
-    subtitle: "Boolean Circuits",
-    icon: "⊕",
-    defaultInputType: "formula",
-    defaultRawData: "(x1 & x2) | (~x3 & x4)",
-    color: "#C05640",
-  },
-  {
-    id: "algebraic-geometry",
-    label: "Algebraic Geometry",
-    subtitle: "Varieties & Schemes",
-    icon: "∿",
-    defaultInputType: "formula",
-    defaultRawData: "x**2 + y**2 - z**2",
-    color: "#D19E4A",
-  },
-  {
-    id: "batch-explorer",
-    label: "Batch Explorer",
-    subtitle: "Statistical Trends",
-    icon: "⋯",
-    defaultInputType: "formula",
-    defaultRawData: "",
-    color: "#6B8075",
-  },
-  {
-    id: "tda",
-    label: "Topological Data Analysis",
-    subtitle: "Persistent Homology",
-    icon: "⧖",
-    defaultInputType: "formula",
-    defaultRawData: "noisy_circle",
-    color: "#C05640",
-  },
-  {
-    id: "wl_test",
-    label: "Graph Isomorphism (WL Test)",
-    subtitle: "The Twin Test",
-    icon: "⋍",
-    defaultInputType: "formula",
-    defaultRawData: "",
-    color: "#D19E4A",
-  },
-];
-
-function Sidebar({
-  selected,
-  onSelect,
-}: {
-  selected: Domain;
-  onSelect: (d: Domain) => void;
-}) {
-  return (
-    <aside
-      style={{
-        width: 220, minWidth: 220, flexShrink: 0,
-        background: "#1C1F21",
-        borderRight: "1px solid #2C3133",
-        display: "flex", flexDirection: "column",
-        padding: "24px 0", overflowY: "auto",
-      }}
-    >
-      <div style={{ padding: "0 20px 28px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-          <span style={{ fontSize: 22, lineHeight: 1 }}>𝕄</span>
-          <span style={{ color: "#E6E4DF", fontWeight: 700, fontSize: 14, letterSpacing: "0.02em", fontFamily: "'Georgia', serif" }}>
-            Discovery Engine
-          </span>
-        </div>
-        <span style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.08em" }}>VISUAL MATH · v0.7</span>
-      </div>
-
-      <div style={{ padding: "0 20px 12px", color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-        Mathematical Domain
-      </div>
-
-      {DOMAINS.map((d) => {
-        const isActive = d.id === selected.id;
-        const isLive = d.id === "combinatorics" || d.id === "knot" || d.id === "topology" || d.id === "circuit" || d.id === "algebraic-geometry" || d.id === "batch-explorer" || d.id === "tda" || d.id === "wl_test";
-        return (
-          <button
-            key={d.id}
-            id={`domain-btn-${d.id}`}
-            onClick={() => isLive && onSelect(d)}
-            style={{
-              background: isActive ? "#222628" : "transparent",
-              border: "none",
-              borderLeft: isActive ? `2px solid ${d.color}` : "2px solid transparent",
-              cursor: isLive ? "pointer" : "default",
-              padding: "12px 20px", textAlign: "left",
-              transition: "all 0.15s ease", display: "flex", alignItems: "center", gap: 12,
-              opacity: isLive ? 1 : 0.4,
-            }}
-            onMouseEnter={(e) => { if (!isActive && isLive) (e.currentTarget as HTMLButtonElement).style.background = "#1e2124"; }}
-            onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = isActive ? "#222628" : "transparent"; }}
-          >
-            <span style={{ fontSize: 18, width: 26, textAlign: "center", color: isActive ? d.color : "#888C8E", transition: "color 0.15s" }}>
-              {d.icon}
-            </span>
-            <div>
-              <div style={{ color: isActive ? "#E6E4DF" : "#888C8E", fontSize: 13, fontWeight: isActive ? 600 : 400, transition: "color 0.15s", letterSpacing: "0.01em" }}>
-                {d.label}
-              </div>
-              <div style={{ color: "#888C8E", fontSize: 10, marginTop: 1 }}>
-                {isLive ? d.subtitle : "Coming soon"}
-              </div>
-            </div>
-          </button>
-        );
-      })}
-
-      <div style={{ marginTop: "auto", padding: "20px 20px 0", borderTop: "1px solid #2C3133" }}>
-        <div style={{ color: "#888C8E", fontSize: 10, lineHeight: 1.6 }}>
-          Paste an edge list, type a formula, or upload a NetworkX JSON file.
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// AlgebraicDropzone — implicit polynomial input for Algebraic Geometry domain
-// ---------------------------------------------------------------------------
-
-function AlgebraicDropzone({
-  domain,
-  algebraicFormula,
-  setAlgebraicFormula,
-}: {
-  domain: Domain;
-  algebraicFormula: string;
-  setAlgebraicFormula: (f: string) => void;
-}) {
-  const examples = [
-    { label: "Cone", formula: "x**2 + y**2 - z**2" },
-    { label: "Sphere", formula: "x**2 + y**2 + z**2 - 4" },
-    { label: "Torus", formula: "(sqrt(x**2 + y**2) - 2)**2 + z**2 - 1" },
-    { label: "Cusp", formula: "x**2 + y**2 - z**3" },
-    { label: "Whitney", formula: "x**2 - y**2*z" },
-  ];
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
-        Enter an implicit equation F(x, y, z) = 0 — uses Python / numexpr syntax
-      </div>
-      <input
-        id="algebraic-formula-input"
-        value={algebraicFormula}
-        onChange={(e) => setAlgebraicFormula(e.target.value)}
-        placeholder="x**2 + y**2 - z**2"
-        spellCheck={false}
-        autoComplete="off"
-        style={{
-          width: "100%", background: "#111315",
-          border: `1.5px solid ${domain.color}40`,
-          borderRadius: 8, padding: "12px 14px",
-          color: "#E6E4DF", fontSize: 13,
-          fontFamily: "'Courier New', monospace",
-          outline: "none", transition: "border-color 0.2s",
-          boxSizing: "border-box",
-        }}
-        onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = domain.color; }}
-        onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = `${domain.color}40`; }}
-      />
-      {/* Quick-pick example formulas */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {examples.map(({ label, formula }) => (
-          <button
-            key={label}
-            onClick={() => setAlgebraicFormula(formula)}
-            style={{
-              background: algebraicFormula === formula ? `${domain.color}30` : "#1C1F21",
-              border: `1px solid ${algebraicFormula === formula ? domain.color : "#2C3133"}`,
-              borderRadius: 6, padding: "4px 10px",
-              color: algebraicFormula === formula ? domain.color : "#888C8E",
-              cursor: "pointer", fontSize: 10, fontWeight: 600,
-              letterSpacing: "0.04em", transition: "all 0.15s ease",
-            }}
-          >{label}</button>
-        ))}
-      </div>
-      <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 8, padding: "10px 14px", fontSize: 10, lineHeight: 1.8, color: "#555A5D" }}>
-        <span style={{ color: "#888C8E", fontWeight: 600 }}>Syntax</span>
-        {"  "}
-        <code style={{ color: "#E6E4DF" }}>**</code> powers
-        {"  ·  "}
-        <code style={{ color: "#E6E4DF" }}>sqrt()</code>
-        {"  ·  "}
-        <code style={{ color: "#E6E4DF" }}>sin() cos() exp()</code>
-        {"  ·  variables: "}
-        <code style={{ color: domain.color }}>x y z</code>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// CircuitDropzone — formula input for Complexity Theory domain
-// ---------------------------------------------------------------------------
-
-function CircuitDropzone({
-  domain,
-  circuitFormula,
-  setCircuitFormula,
-}: {
-  domain: Domain;
-  circuitFormula: string;
-  setCircuitFormula: (f: string) => void;
-}) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
-        Enter a boolean logic formula to generate its circuit DAG
-      </div>
-      <div style={{ position: "relative" }}>
-        <input
-          id="circuit-formula-input"
-          value={circuitFormula}
-          onChange={(e) => setCircuitFormula(e.target.value)}
-          placeholder="(x1 & x2) | (~x3 & x4)"
-          spellCheck={false}
-          autoComplete="off"
-          style={{
-            width: "100%", background: "#111315",
-            border: `1.5px solid ${domain.color}40`,
-            borderRadius: 8, padding: "12px 14px",
-            color: "#E6E4DF", fontSize: 13,
-            fontFamily: "'Courier New', monospace",
-            outline: "none", transition: "border-color 0.2s",
-            boxSizing: "border-box",
-          }}
-          onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = domain.color; }}
-          onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = `${domain.color}40`; }}
-        />
-      </div>
-      <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 8, padding: "10px 14px", fontSize: 10, lineHeight: 1.8, color: "#555A5D" }}>
-        <span style={{ color: "#888C8E", fontWeight: 600 }}>Supported gates</span><br />
-        <span style={{ color: domain.color }}>& </span><code style={{ color: "#E6E4DF" }}>AND</code>
-        {"   "}
-        <span style={{ color: domain.color }}>| </span><code style={{ color: "#E6E4DF" }}>OR</code>
-        {"   "}
-        <span style={{ color: domain.color }}>^ </span><code style={{ color: "#E6E4DF" }}>XOR</code>
-        {"   "}
-        <span style={{ color: domain.color }}>~ </span><code style={{ color: "#E6E4DF" }}>NOT</code><br />
-        <span style={{ color: "#888C8E", fontWeight: 600 }}>Example: </span>
-        <code style={{ color: "#E6E4DF" }}>(x1 & x2) | (~x3 & x4)</code>
-        {"  "}·{"  "}
-        <code style={{ color: "#E6E4DF" }}>x1 ^ (x2 | ~x3)</code>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// KnotDropzone — simplified formula-only input for Knot Theory domain
-// ---------------------------------------------------------------------------
-
-function KnotDropzone({
-  domain,
-  knotFormula,
-  setKnotFormula,
-}: {
-  domain: Domain;
-  knotFormula: string;
-  setKnotFormula: (v: string) => void;
-}) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
-        Enter a torus knot formula
-      </div>
-      <input
-        id="knot-formula-input"
-        type="text"
-        value={knotFormula}
-        onChange={(e) => setKnotFormula(e.target.value)}
-        placeholder="e.g.  T_3_2  or  T_5_3"
-        style={{
-          background: "#111315", border: "1px solid #2C3133",
-          borderRadius: 10, color: "#E6E4DF",
-          fontFamily: "'Georgia', serif", fontSize: 22,
-          padding: "16px 18px", outline: "none",
-          transition: "border-color 0.15s", letterSpacing: "0.1em",
-        }}
-        onFocus={(e) => { e.target.style.borderColor = domain.color; }}
-        onBlur={(e) => { e.target.style.borderColor = "#2C3133"; }}
-        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-      />
-      <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 10, padding: "16px 18px", color: "#888C8E", fontSize: 11, lineHeight: 2 }}>
-        <span style={{ color: domain.color, fontWeight: 600, letterSpacing: "0.04em" }}>Supported knots — T_p_q (Torus Knots)</span><br />
-        <code style={{ color: "#E6E4DF" }}>T_3_2</code>  — Trefoil knot  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: "#D19E4A", fontFamily: "'Georgia',serif", fontSize: 12 }}>c = 3</span><br />
-        <code style={{ color: "#E6E4DF" }}>T_5_2</code>  — Cinquefoil knot &nbsp;&nbsp;<span style={{ color: "#D19E4A", fontFamily: "'Georgia',serif", fontSize: 12 }}>c = 5</span><br />
-        <code style={{ color: "#E6E4DF" }}>T_5_3</code>  — Torus knot (5,3) &nbsp;<span style={{ color: "#D19E4A", fontFamily: "'Georgia',serif", fontSize: 12 }}>c = 8</span><br />
-        <code style={{ color: "#E6E4DF" }}>T_7_2</code>  — Heptafoil knot &nbsp;&nbsp;<span style={{ color: "#D19E4A", fontFamily: "'Georgia',serif", fontSize: 12 }}>c = 7</span><br />
-        <span style={{ color: "#2C3133", fontSize: 10 }}>Formula: c = min(p(q−1), q(p−1)) · Both p, q must be coprime integers ≥ 2</span>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// TDADropzone — Point cloud & persistent homology configuration
-// ---------------------------------------------------------------------------
-
-function TDADropzone({
-  domain,
-  shape,
-  setShape,
-  numPoints,
-  setNumPoints,
-  noiseLevel,
-  setNoiseLevel,
-  onCompute,
-  isLoading,
-}: {
-  domain: Domain;
-  shape: "noisy_circle" | "noisy_sphere" | "random_noise";
-  setShape: (s: "noisy_circle" | "noisy_sphere" | "random_noise") => void;
-  numPoints: number;
-  setNumPoints: (n: number) => void;
-  noiseLevel: number;
-  setNoiseLevel: (l: number) => void;
-  onCompute: () => void;
-  isLoading: boolean;
-}) {
-  const shapes: { id: "noisy_circle" | "noisy_sphere" | "random_noise"; label: string; desc: string; icon: string }[] = [
-    { id: "noisy_circle", label: "Noisy Circle", desc: "S¹ with Gaussian jitter · prominent 1D cycle H₁", icon: "◯" },
-    { id: "noisy_sphere", label: "Noisy Sphere", desc: "S² spherical surface · 2D topology · trivial H₁", icon: "🌐" },
-    { id: "random_noise", label: "Pure Noise", desc: "Uniform [-1, 1]³ box · stochastic null hypothesis", icon: "⁘" },
-  ];
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
-          Select point cloud manifold geometry and calibrate Vietoris-Rips filtration
-        </div>
-        <button
-          onClick={onCompute}
-          disabled={isLoading}
-          style={{
-            background: `${domain.color}25`,
-            border: `1px solid ${domain.color}`,
-            borderRadius: 6,
-            color: domain.color,
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.06em",
-            padding: "5px 14px",
-            cursor: isLoading ? "not-allowed" : "pointer",
-            transition: "all 0.15s ease",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            textTransform: "uppercase",
-          }}
-          onMouseEnter={(e) => {
-            if (!isLoading) (e.currentTarget as HTMLButtonElement).style.background = `${domain.color}40`;
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = `${domain.color}25`;
-          }}
-        >
-          <span>⧖</span>
-          {isLoading ? "Computing…" : "Compute Homology"}
-        </button>
-      </div>
-
-      {/* Shape selection buttons */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
-        {shapes.map((s) => {
-          const isSelected = shape === s.id;
-          return (
-            <button
-              key={s.id}
-              onClick={() => setShape(s.id)}
-              style={{
-                background: isSelected ? `${domain.color}25` : "#111315",
-                border: `1.5px solid ${isSelected ? domain.color : "#2C3133"}`,
-                borderRadius: 8,
-                padding: "12px 14px",
-                textAlign: "left",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ color: isSelected ? "#E6E4DF" : "#888C8E", fontSize: 13, fontWeight: 600 }}>
-                  {s.icon} {s.label}
-                </span>
-                {isSelected && (
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: domain.color }} />
-                )}
-              </div>
-              <span style={{ color: isSelected ? "#C2BFB8" : "#555A5D", fontSize: 10, lineHeight: 1.4 }}>
-                {s.desc}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Sliders: Sample Points & Noise Level */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {/* Sample Count */}
-        <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-              Sample Points |X|
-            </span>
-            <span style={{ color: domain.color, fontFamily: "'Courier New', monospace", fontSize: 13, fontWeight: 700 }}>
-              {numPoints}
-            </span>
-          </div>
-          <input
-            type="range"
-            min={40}
-            max={300}
-            step={10}
-            value={numPoints}
-            onChange={(e) => setNumPoints(Number(e.target.value))}
-            style={{ width: "100%", accentColor: domain.color }}
-          />
-          <div style={{ display: "flex", justifyContent: "space-between", color: "#3A3F42", fontSize: 9 }}>
-            <span>40</span>
-            <span>150 (optimal)</span>
-            <span>300</span>
-          </div>
-        </div>
-
-        {/* Noise Level */}
-        <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-              Noise Level (σ)
-            </span>
-            <span style={{ color: domain.color, fontFamily: "'Courier New', monospace", fontSize: 13, fontWeight: 700 }}>
-              {noiseLevel.toFixed(2)}
-            </span>
-          </div>
-          <input
-            type="range"
-            min={0.0}
-            max={0.4}
-            step={0.02}
-            value={noiseLevel}
-            onChange={(e) => setNoiseLevel(Number(e.target.value))}
-            style={{ width: "100%", accentColor: domain.color }}
-          />
-          <div style={{ display: "flex", justifyContent: "space-between", color: "#3A3F42", fontSize: 9 }}>
-            <span>0.00 (clean)</span>
-            <span>0.15 (standard)</span>
-            <span>0.40 (heavy)</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Mathematical Reference Note */}
-      <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 8, padding: "10px 14px", fontSize: 10, lineHeight: 1.8, color: "#555A5D" }}>
-        <span style={{ color: "#888C8E", fontWeight: 600 }}>Vietoris-Rips Complex: </span>
-        Simplices formed when pairwise distance ≤ 2ε.
-        {"  ·  "}
-        <span style={{ color: "#6B8075" }}>H₀</span> connected clusters
-        {"  ·  "}
-        <span style={{ color: "#C05640" }}>H₁</span> persistent 1D loops
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// WLDropzone — Two textareas for the Graph Isomorphism twin test
-// ---------------------------------------------------------------------------
-
-function WLDropzone({
-  domain,
-  formula1, setFormula1,
-  formula2, setFormula2,
-}: {
-  domain: Domain;
-  formula1: string; setFormula1: (v: string) => void;
-  formula2: string; setFormula2: (v: string) => void;
-}) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Graph A</div>
-        <textarea
-          value={formula1} onChange={(e) => setFormula1(e.target.value)}
-          placeholder="E.g., C_6 or paste an edge list"
-          style={{
-            minHeight: 120, background: "#111315", border: "1px solid #2C3133",
-            borderRadius: 8, color: "#E6E4DF", padding: "12px 14px",
-            fontFamily: "'Courier New', monospace", fontSize: 13,
-            outline: "none", resize: "vertical", transition: "border-color 0.2s"
-          }}
-          onFocus={(e) => { e.target.style.borderColor = domain.color; }}
-          onBlur={(e) => { e.target.style.borderColor = "#2C3133"; }}
-        />
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Graph B</div>
-        <textarea
-          value={formula2} onChange={(e) => setFormula2(e.target.value)}
-          placeholder="E.g., C_6 or paste an edge list"
-          style={{
-            minHeight: 120, background: "#111315", border: "1px solid #2C3133",
-            borderRadius: 8, color: "#E6E4DF", padding: "12px 14px",
-            fontFamily: "'Courier New', monospace", fontSize: 13,
-            outline: "none", resize: "vertical", transition: "border-color 0.2s"
-          }}
-          onFocus={(e) => { e.target.style.borderColor = domain.color; }}
-          onBlur={(e) => { e.target.style.borderColor = "#2C3133"; }}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// ManifoldDropzone — shape picker for Topology domain
-// ---------------------------------------------------------------------------
-
-function ManifoldDropzone({
-  domain,
-  manifoldShape,
-  setManifoldShape,
-  deformation,
-  setDeformation,
-  exprX, setExprX,
-  exprY, setExprY,
-  exprZ, setExprZ,
-  uMin, setUMin,
-  uMax, setUMax,
-  vMin, setVMin,
-  vMax, setVMax,
-}: {
-  domain: Domain;
-  manifoldShape: "Sphere" | "Torus" | "Custom";
-  setManifoldShape: (s: "Sphere" | "Torus" | "Custom") => void;
-  deformation: "none" | "stretch" | "ripple";
-  setDeformation: (d: "none" | "stretch" | "ripple") => void;
-  exprX: string; setExprX: (v: string) => void;
-  exprY: string; setExprY: (v: string) => void;
-  exprZ: string; setExprZ: (v: string) => void;
-  uMin: string; setUMin: (v: string) => void;
-  uMax: string; setUMax: (v: string) => void;
-  vMin: string; setVMin: (v: string) => void;
-  vMax: string; setVMax: (v: string) => void;
-}) {
-  const shapes: { id: "Sphere" | "Torus" | "Custom"; label: string; icon: string; desc: string; euler: string }[] = [
-    { id: "Sphere", label: "Sphere",   icon: "◎", desc: "Simply-connected surface · genus 0", euler: "χ = 2" },
-    { id: "Torus",  label: "Torus",    icon: "⊙", desc: "Surface with 1 handle · genus 1",   euler: "χ = 0" },
-    { id: "Custom", label: "Custom",   icon: "∫", desc: "User-defined X(u,v), Y(u,v), Z(u,v)", euler: "χ = ?" },
-  ];
-  const deformations: { id: "none" | "stretch" | "ripple"; label: string; symbol: string }[] = [
-    { id: "none",    label: "Perfect (None)",        symbol: "∅" },
-    { id: "stretch", label: "Ellipsoid (Stretch)",   symbol: "↕" },
-    { id: "ripple",  label: "Interference (Ripple)", symbol: "∿" },
-  ];
-
-  const inputStyle: React.CSSProperties = {
-    width: "100%", background: "#111315", border: "1px solid #2C3133",
-    borderRadius: 6, padding: "7px 10px", color: "#E6E4DF",
-    fontSize: 12, fontFamily: "'Courier New', monospace",
-    outline: "none", transition: "border-color 0.15s",
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
-        Select a manifold shape to generate a parametric mesh
-      </div>
-      <div style={{ display: "flex", gap: 10 }}>
-        {shapes.map((s) => {
-          const isActive = manifoldShape === s.id;
-          return (
-            <button
-              key={s.id}
-              id={`manifold-shape-${s.id.toLowerCase()}`}
-              onClick={() => setManifoldShape(s.id)}
-              style={{
-                flex: 1, background: isActive ? `${domain.color}12` : "#111315",
-                border: `1.5px solid ${isActive ? domain.color : "#2C3133"}`,
-                borderRadius: 10, padding: "14px 10px", cursor: "pointer",
-                textAlign: "center", transition: "all 0.15s ease",
-              }}
-            >
-              <div style={{ fontSize: 26, marginBottom: 6, color: isActive ? domain.color : "#888C8E", transition: "color 0.15s" }}>{s.icon}</div>
-              <div style={{ color: isActive ? "#E6E4DF" : "#888C8E", fontWeight: isActive ? 700 : 400, fontSize: 13, marginBottom: 3, transition: "color 0.15s" }}>{s.label}</div>
-              <div style={{ color: "#555A5D", fontSize: 9, lineHeight: 1.4 }}>{s.desc}</div>
-              <div style={{ marginTop: 6, display: "inline-block", background: isActive ? `${domain.color}20` : "#2C3133", border: `1px solid ${isActive ? domain.color : "#2C3133"}`, color: isActive ? domain.color : "#888C8E", borderRadius: 4, padding: "2px 8px", fontFamily: "'Courier New', monospace", fontSize: 10, fontWeight: 700, transition: "all 0.15s" }}>
-                {s.euler}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Custom Parametric Equation Editor ── */}
-      {manifoldShape === "Custom" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Parametric Equations
-          </div>
-          {/* X, Y, Z inputs */}
-          {(
-            [
-              { label: "X(u,v)", value: exprX, set: setExprX },
-              { label: "Y(u,v)", value: exprY, set: setExprY },
-              { label: "Z(u,v)", value: exprZ, set: setExprZ },
-            ] as { label: string; value: string; set: (v: string) => void }[]
-          ).map(({ label, value, set }) => (
-            <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ color: domain.color, fontFamily: "'Courier New', monospace", fontSize: 11, fontWeight: 700, width: 44, flexShrink: 0 }}>{label} =</span>
-              <input
-                id={`expr-${label.replace("(u,v)", "").toLowerCase()}`}
-                value={value}
-                onChange={(e) => set(e.target.value)}
-                style={inputStyle}
-                spellCheck={false}
-                autoComplete="off"
-              />
-            </div>
-          ))}
-          {/* u / v range inputs */}
-          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-            {(
-              [
-                { label: "u min", value: uMin, set: setUMin },
-                { label: "u max", value: uMax, set: setUMax },
-                { label: "v min", value: vMin, set: setVMin },
-                { label: "v max", value: vMax, set: setVMax },
-              ] as { label: string; value: string; set: (v: string) => void }[]
-            ).map(({ label, value, set }) => (
-              <div key={label} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ color: "#555A5D", fontSize: 9, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</span>
-                <input
-                  id={`range-${label.replace(" ", "-")}`}
-                  value={value}
-                  onChange={(e) => set(e.target.value)}
-                  style={{ ...inputStyle, fontSize: 11, padding: "6px 8px" }}
-                />
-              </div>
-            ))}
-          </div>
-          {/* Example hint block */}
-          <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 8, padding: "10px 14px", fontSize: 10, lineHeight: 1.8, color: "#555A5D" }}>
-            <span style={{ color: "#888C8E", fontWeight: 600 }}>Examples</span><br />
-            <span style={{ color: domain.color }}>Möbius Strip</span>
-            {"  "}X: <code style={{ color: "#E6E4DF" }}>(2+v*cos(u/2))*cos(u)</code>
-            {"  "}Y: <code style={{ color: "#E6E4DF" }}>(2+v*cos(u/2))*sin(u)</code>
-            {"  "}Z: <code style={{ color: "#E6E4DF" }}>v*sin(u/2)</code>
-            {"  "}u∈[0, 6.28], v∈[−1, 1]<br />
-            <span style={{ color: domain.color }}>Catenoid</span>
-            {"      "}X: <code style={{ color: "#E6E4DF" }}>cosh(v)*cos(u)</code>
-            {"      "}Y: <code style={{ color: "#E6E4DF" }}>cosh(v)*sin(u)</code>
-            {"      "}Z: <code style={{ color: "#E6E4DF" }}>v</code>
-            {"                                "}u∈[0, 6.28], v∈[−2, 2]
-          </div>
-        </div>
-      )}
-
-      {/* ── Deformation selector (hidden for Custom — formula already encodes shape) ── */}
-      {manifoldShape !== "Custom" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Geometric Deformation
-          </div>
-          <div style={{ display: "flex", gap: 0, border: "1px solid #2C3133", borderRadius: 8, overflow: "hidden" }}>
-            {deformations.map((d, i) => {
-              const isActive = deformation === d.id;
-              return (
-                <button
-                  key={d.id}
-                  id={`manifold-deformation-${d.id}`}
-                  onClick={() => setDeformation(d.id)}
-                  style={{
-                    flex: 1,
-                    background: isActive ? `${domain.color}18` : "transparent",
-                    border: "none",
-                    borderLeft: i > 0 ? "1px solid #2C3133" : "none",
-                    padding: "9px 6px",
-                    cursor: "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 3,
-                    transition: "background 0.15s",
-                  }}
-                >
-                  <span style={{ fontSize: 14, color: isActive ? domain.color : "#555A5D", transition: "color 0.15s" }}>{d.symbol}</span>
-                  <span style={{ fontSize: 9, letterSpacing: "0.04em", color: isActive ? "#E6E4DF" : "#555A5D", transition: "color 0.15s", whiteSpace: "nowrap" }}>{d.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 18px", color: "#888C8E", fontSize: 11, lineHeight: 1.9 }}>
-        <span style={{ color: domain.color, fontWeight: 600, letterSpacing: "0.04em" }}>Laplacian Harmonics — Spectral Geometry</span><br />
-        The mesh Laplacian eigenvector partitions the surface into{" "}
-        <span style={{ color: "#E6E4DF" }}>vibration modes</span>.<br />
-        <span style={{ color: "#C05640" }}>Terracotta</span> = positive amplitude &nbsp;·&nbsp;
-        <span style={{ color: "#6B8075" }}>Sage</span> = negative amplitude &nbsp;·&nbsp;
-        <span style={{ color: "#D19E4A" }}>Ochre</span> = nodal line (≈ 0)
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Dropzone / Input
-// ---------------------------------------------------------------------------
-
-function Dropzone({
-  domain, inputMode, setInputMode,
-  pastedText, setPastedText,
-  formulaText, setFormulaText,
-  onFileLoad, isDragging, setIsDragging,
-}: {
-  domain: Domain;
-  inputMode: InputMode;
-  setInputMode: (m: InputMode) => void;
-  pastedText: string;
-  setPastedText: (v: string) => void;
-  formulaText: string;
-  setFormulaText: (v: string) => void;
-  onFileLoad: (raw: string) => void;
-  isDragging: boolean;
-  setIsDragging: (v: boolean) => void;
-}) {
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const readFile = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onload = (ev) => onFileLoad(ev.target?.result as string);
-    reader.readAsText(file);
-  }, [onFileLoad]);
-
-  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault(); setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) readFile(file);
-  }, [readFile, setIsDragging]);
-
-  const modes: { id: InputMode; label: string }[] = [
-    { id: "upload", label: "Upload JSON" },
-    { id: "paste", label: "Edge List" },
-    { id: "formula", label: "Formula" },
-  ];
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1, paddingBottom: 16 }}>
-      {/* Mode tabs */}
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #2C3133" }}>
-        {modes.map((m) => (
-          <button
-            key={m.id} id={`tab-${m.id}`}
-            onClick={() => setInputMode(m.id)}
-            style={{
-              background: "transparent", border: "none",
-              borderBottom: inputMode === m.id ? `2px solid ${domain.color}` : "2px solid transparent",
-              color: inputMode === m.id ? "#E6E4DF" : "#888C8E",
-              cursor: "pointer", padding: "10px 18px", fontSize: 12,
-              fontWeight: inputMode === m.id ? 600 : 400,
-              letterSpacing: "0.04em", transition: "all 0.15s", marginBottom: -1,
-            }}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Upload — FileReader stores raw JSON string */}
-      {inputMode === "upload" && (
-        <div
-          id="dropzone-area"
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          onClick={() => fileRef.current?.click()}
-          style={{
-            minHeight: 220,
-            border: `1.5px dashed ${isDragging ? domain.color : "#2C3133"}`,
-            borderRadius: 12, display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center",
-            cursor: "pointer", gap: 12, transition: "all 0.2s ease",
-            background: isDragging ? `${domain.color}08` : "transparent",
-          }}
-        >
-          <div style={{ fontSize: 36, opacity: isDragging ? 1 : 0.5, transition: "opacity 0.2s" }}>
-            {domain.icon}
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ color: "#E6E4DF", fontSize: 14, fontWeight: 500, marginBottom: 4 }}>
-              Drop your JSON file here
-            </div>
-            <div style={{ color: "#888C8E", fontSize: 12 }}>
-              or click to browse · accepts{" "}
-              <code style={{ background: "#2C3133", padding: "1px 6px", borderRadius: 4, fontSize: 11, color: domain.color }}>
-                .json
-              </code>{" "}
-              in NetworkX node-link format
-            </div>
-          </div>
-          <input
-            ref={fileRef} type="file" id="file-input" accept=".json"
-            style={{ display: "none" }}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) readFile(f); }}
-          />
-        </div>
-      )}
-
-      {/* Paste — edge_list */}
-      {inputMode === "paste" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
-            One edge per line, space or comma separated — e.g.{" "}
-            <code style={{ color: domain.color, fontSize: 11 }}>0 1</code>
-          </div>
-          <textarea
-            id="edge-list-input"
-            value={pastedText}
-            onChange={(e) => setPastedText(e.target.value)}
-            placeholder={"0 1\n1 2\n2 3\n3 0\n0 2"}
-            style={{
-              minHeight: 200, background: "#111315", border: "1px solid #2C3133",
-              borderRadius: 10, color: "#E6E4DF",
-              fontFamily: "'Courier New', Courier, monospace",
-              fontSize: 13, lineHeight: 1.7, padding: "14px 16px",
-              resize: "vertical", outline: "none", transition: "border-color 0.15s",
-            }}
-            onFocus={(e) => { e.target.style.borderColor = domain.color; }}
-            onBlur={(e) => { e.target.style.borderColor = "#2C3133"; }}
-          />
-        </div>
-      )}
-
-      {/* Formula */}
-      {inputMode === "formula" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.04em" }}>
-            Enter a graph-theoretic formula
-          </div>
-          <input
-            id="formula-input" type="text"
-            value={formulaText}
-            onChange={(e) => setFormulaText(e.target.value)}
-            placeholder="e.g.  K_5  or  C_6  or  P_4"
-            style={{
-              background: "#111315", border: "1px solid #2C3133",
-              borderRadius: 10, color: "#E6E4DF",
-              fontFamily: "'Georgia', serif", fontSize: 20,
-              padding: "16px 18px", outline: "none",
-              transition: "border-color 0.15s", letterSpacing: "0.08em",
-            }}
-            onFocus={(e) => { e.target.style.borderColor = domain.color; }}
-            onBlur={(e) => { e.target.style.borderColor = "#2C3133"; }}
-          />
-          <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 10, padding: "16px 18px", color: "#888C8E", fontSize: 11, lineHeight: 1.9 }}>
-            <span style={{ color: domain.color, fontWeight: 600, letterSpacing: "0.04em" }}>Supported graph families</span><br />
-            <code style={{ color: "#E6E4DF" }}>K_n</code>      — Complete graph &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.g. <code style={{ color: "#D19E4A" }}>K_5</code><br />
-            <code style={{ color: "#E6E4DF" }}>C_n</code>      — Cycle graph &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.g. <code style={{ color: "#D19E4A" }}>C_6</code><br />
-            <code style={{ color: "#E6E4DF" }}>P_n</code>      — Path graph &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.g. <code style={{ color: "#D19E4A" }}>P_4</code><br />
-            <code style={{ color: "#E6E4DF" }}>S_n</code>      — Star graph &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.g. <code style={{ color: "#D19E4A" }}>S_10</code><br />
-            <code style={{ color: "#E6E4DF" }}>B_n_m</code>    — Barbell graph &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.g. <code style={{ color: "#D19E4A" }}>B_5_2</code><br />
-            <code style={{ color: "#E6E4DF" }}>G_n_m</code>    — 2D Grid graph &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e.g. <code style={{ color: "#D19E4A" }}>G_3_3</code><br />
-            <code style={{ color: "#E6E4DF" }}>ER_n_p</code>   — Erdős–Rényi random &nbsp;e.g. <code style={{ color: "#D19E4A" }}>ER_20_0.2</code>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Microscope — empty state
-// ---------------------------------------------------------------------------
-
-function EmptyMicroscope({ domain }: { domain: Domain }) {
-  return (
-    <div style={{ textAlign: "center", maxWidth: 380 }}>
-      <div style={{ position: "relative", width: 120, height: 120, margin: "0 auto 28px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {[1, 2, 3].map((i) => (
-          <div key={i} style={{ position: "absolute", borderRadius: "50%", border: `1px solid ${domain.color}`, width: i * 36, height: i * 36, opacity: 0.15 + i * 0.1, animation: `pulse ${1.8 + i * 0.4}s ease-in-out infinite`, animationDelay: `${i * 0.3}s` }} />
-        ))}
-        <span style={{ fontSize: 28, color: domain.color, opacity: 0.6, position: "relative", zIndex: 1 }}>{domain.icon}</span>
-      </div>
-      <div style={{ color: "#E6E4DF", fontSize: 15, fontWeight: 500, marginBottom: 8 }}>Awaiting Mathematical Object</div>
-      <div style={{ color: "#888C8E", fontSize: 12, lineHeight: 1.7 }}>
-        Input a <span style={{ color: domain.color }}>{domain.label.toLowerCase()}</span> structure above and click{" "}
-        <span style={{ color: domain.color, fontWeight: 600 }}>Discover Structure</span>.<br />
-        The 1-skeleton and invariants will render here.
-      </div>
-      <div style={{ marginTop: 24, padding: "10px 16px", background: "#1C1F21", borderRadius: 8, border: "1px solid #2C3133", color: "#888C8E", fontSize: 11, lineHeight: 1.6 }}>
-        🔬 1-skeleton · β₀ Betti number · Density · Planarity · Persistent homology (Step 3)
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Microscope — result view (renders MathResponse.metadata)
-// ---------------------------------------------------------------------------
-
-// Suppress unused-type warning — TopologyMetadata is used as a JSDoc anchor
-type _TopologyMetadata = TopologyMetadata;
-
-function ResultView({
-  result,
-  domain,
-  viewMode,
-  setViewMode,
-  onEdgeRemove,
-  deletedEdges,
-}: {
-  result: MathResponse;
-  domain: Domain;
-  viewMode: "spectral" | "saliency";
-  setViewMode: (m: "spectral" | "saliency") => void;
-  onEdgeRemove?: (source: string | number, target: string | number) => void;
-  deletedEdges?: (string | number)[][];
-}) {
-  const m = result.metadata;
-  const densityColor = m.density > 0.7 ? "#C05640" : m.density > 0.3 ? "#D19E4A" : "#6B8075";
-  const densityPct = (m.density * 100).toFixed(1);
-  const planarLabel = m.is_planar === null ? "Skipped (|E| > 1 000)" : m.is_planar ? "Yes ✓" : "No ✗";
-  const planarColor = m.is_planar === null ? "#888C8E" : m.is_planar ? "#6B8075" : "#C05640";
-
-  const betti = result.topology?.betti_numbers ?? [];
-  const beta1 = betti[1] ?? 0;
-  const beta2 = betti[2] ?? 0;
-
-  const rows = [
-    { name: "Vertices |V|", value: m.num_nodes, color: "#D19E4A", desc: "Cardinality of the vertex set" },
-    { name: "Edges |E|", value: m.num_edges, color: "#C05640", desc: "Cardinality of the edge set" },
-    { name: "Connected", value: m.is_connected ? "Yes ✓" : "No ✗", color: m.is_connected ? "#6B8075" : "#C05640", desc: "All vertices reachable from each other" },
-    { name: "β₀ Components", value: m.num_connected_components, color: m.num_connected_components === 1 ? "#6B8075" : "#D19E4A", desc: "0th Betti number — path-connected components" },
-    { name: "β₁ Cycles (Holes)", value: beta1, color: beta1 === 0 ? "#888C8E" : "#C05640", desc: "1st Betti number — 1D loops / tunnels" },
-    { name: "β₂ Voids (Bubbles)", value: beta2, color: beta2 === 0 ? "#888C8E" : "#D19E4A", desc: "2nd Betti number — 2D enclosed voids" },
-    { name: "Density", value: `${densityPct}%`, color: densityColor, desc: "2|E| / (|V|(|V|−1))  ∈ [0, 1]" },
-    { name: "Planar", value: planarLabel, color: planarColor, desc: "Boyer–Myrvold planarity test" },
-  ];
-
-  return (
-    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Summary cards */}
-      <div style={{ display: "flex", gap: 12 }}>
-        {[
-          { label: "Nodes", value: m.num_nodes, color: "#D19E4A" },
-          { label: "Edges", value: m.num_edges, color: "#C05640" },
-          { label: "Components", value: m.num_connected_components, color: "#6B8075" },
-        ].map((s) => (
-          <div key={s.label} style={{ flex: 1, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
-            <div style={{ color: s.color, fontSize: 26, fontWeight: 700, fontFamily: "'Georgia', serif", lineHeight: 1, marginBottom: 6 }}>{s.value}</div>
-            <div style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Density bar */}
-      <div style={{ background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 18px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-          <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>Graph Density</span>
-          <span style={{ color: densityColor, fontSize: 12, fontWeight: 700, fontFamily: "'Courier New', monospace" }}>{densityPct}%</span>
-        </div>
-        <div style={{ height: 6, background: "#2C3133", borderRadius: 3, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${densityPct}%`, background: `linear-gradient(90deg, ${densityColor}80, ${densityColor})`, borderRadius: 3, transition: "width 0.6s ease" }} />
-        </div>
-        <div style={{ color: "#888C8E", fontSize: 10, marginTop: 6 }}>2|E| / (|V|(|V|−1)) — 0 = empty, 1 = complete graph</div>
-      </div>
-
-      {/* Invariants table */}
-      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#1C1F21", overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #2C3133" }}>
-              {["Invariant", "Value", "Mathematical Meaning"].map((h) => (
-                <th key={h} style={{ padding: "10px 14px", color: "#888C8E", fontWeight: 600, fontSize: 10, letterSpacing: "0.08em", textAlign: "left", textTransform: "uppercase" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => (
-              <tr key={row.name}
-                style={{ borderBottom: i < rows.length - 1 ? "1px solid #2C3133" : "none", transition: "background 0.1s" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#22262850"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
-              >
-                <td style={{ padding: "11px 14px", color: "#E6E4DF", fontWeight: 500, whiteSpace: "nowrap" }}>{row.name}</td>
-                <td style={{ padding: "11px 14px" }}>
-                  <span style={{ background: "#2C3133", color: row.color, borderRadius: 5, padding: "3px 10px", fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
-                    {String(row.value)}
-                  </span>
-                </td>
-                <td style={{ padding: "11px 14px", color: "#888C8E", fontSize: 11, lineHeight: 1.5 }}>{row.desc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ── 3D Force-Directed Graph ─────────────────────────────── */}
-      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
-        {/* Header row with title + toggle */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            1-Skeleton · 3D Force Graph (WebGL)
-          </div>
-          {/* View Mode Toggle — premium segmented control */}
-          <div
-            id="view-mode-toggle"
-            style={{
-              display: "flex",
-              background: "#1C1F21",
-              border: "1px solid #2C3133",
-              borderRadius: 8,
-              padding: 3,
-              gap: 2,
-            }}
-          >
-            {(["spectral", "saliency"] as const).map((mode) => {
-              const isActive = viewMode === mode;
-              const labels: Record<string, string> = {
-                spectral: "⟡ Spectral Clusters",
-                saliency: "◈ Gradient Saliency",
-              };
-              return (
-                <button
-                  key={mode}
-                  id={`view-toggle-${mode}`}
-                  onClick={() => setViewMode(mode)}
-                  style={{
-                    background: isActive
-                      ? mode === "saliency" ? "#C05640" : "#6B8075"
-                      : "transparent",
-                    border: "none",
-                    borderRadius: 6,
-                    color: isActive ? "#E6E4DF" : "#888C8E",
-                    cursor: "pointer",
-                    fontSize: 10,
-                    fontWeight: isActive ? 700 : 400,
-                    letterSpacing: "0.04em",
-                    padding: "5px 12px",
-                    transition: "all 0.2s ease",
-                    whiteSpace: "nowrap",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive)
-                      (e.currentTarget as HTMLButtonElement).style.color = "#E6E4DF";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive)
-                      (e.currentTarget as HTMLButtonElement).style.color = "#888C8E";
-                  }}
-                >
-                  {labels[mode]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        {/* Active view legend pill */}
-        <div style={{ marginBottom: 8 }}>
-          {viewMode === "spectral" ? (
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              {[
-                { color: "#C05640", label: "Partition A  (Fiedler > 0)" },
-                { color: "#6B8075", label: "Partition B  (Fiedler < 0)" },
-                { color: "#D19E4A", label: "Bridge / Isolated" },
-              ].map(({ color, label }) => (
-                <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E", letterSpacing: "0.04em" }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
-                  {label}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              {[
-                { color: "#C05640", label: "High Saliency  (> 0.6)" },
-                { color: "#D19E4A", label: "Moderate  (0.3–0.6)" },
-                { color: "#888C8E", label: "Low  (< 0.3)" },
-              ].map(({ color, label }) => (
-                <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E", letterSpacing: "0.04em" }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
-                  {label}
-                </span>
-              ))}
-              <span style={{ fontSize: 9, color: "#888C8E", marginLeft: 4 }}>· node size ∝ saliency score</span>
-            </div>
-          )}
-        </div>
-        <GraphVisualizer
-          nodes={result.nodes}
-          edges={result.edges}
-          deletedEdges={deletedEdges}
-          fiedlerVector={result.topology?.fiedler_vector}
-          saliencyScores={result.topology?.saliency_scores}
-          viewMode={viewMode}
-          height={380}
-          onEdgeRemove={onEdgeRemove}
-        />
-      </div>
-
-      {/* ── Spectral + Betti Stats Grid ─────────────────────────── */}
-      {result.topology && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-          {/* Algebraic Connectivity */}
-          <div style={{ background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 18px" }}>
-            <div style={{ color: "#888C8E", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
-              Algebraic Connectivity  λ₂
-            </div>
-            <div style={{ color: "#D19E4A", fontSize: 22, fontWeight: 700, fontFamily: "'Georgia', serif", marginBottom: 4 }}>
-              {result.topology.algebraic_connectivity.toFixed(4)}
-            </div>
-            <div style={{ color: "#888C8E", fontSize: 10, lineHeight: 1.6 }}>
-              λ₂ = 0 → disconnected graph<br />
-              λ₂ ↑ → more robust connectivity
-            </div>
-          </div>
-
-          {/* Laplacian Spectrum */}
-          <div style={{ background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 18px" }}>
-            <div style={{ color: "#888C8E", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
-              Laplacian Spectrum  (first 5 eigenvalues)
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-              {result.topology.laplacian_eigenvalues.slice(0, 5).map((ev, i) => (
-                <span
-                  key={i}
-                  style={{
-                    background: i === 0 ? "#6B807520" : i === 1 ? "#D19E4A20" : "#2C3133",
-                    border: `1px solid ${i === 0 ? "#6B8075" : i === 1 ? "#D19E4A" : "#2C3133"}`,
-                    color: i === 0 ? "#6B8075" : i === 1 ? "#D19E4A" : "#E6E4DF",
-                    borderRadius: 5,
-                    padding: "3px 10px",
-                    fontFamily: "'Courier New', monospace",
-                    fontSize: 11,
-                    fontWeight: 700,
-                  }}
-                >
-                  {ev.toFixed(4)}
-                </span>
-              ))}
-            </div>
-            <div style={{ color: "#888C8E", fontSize: 10, lineHeight: 1.6 }}>
-              <span style={{ color: "#6B8075" }}>λ₁ = 0</span> always · <span style={{ color: "#D19E4A" }}>λ₂</span> = Fiedler value
-            </div>
-          </div>
-
-          {/* Topological Signature (Betti numbers) */}
-          <div style={{ background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 18px" }}>
-            <div style={{ color: "#888C8E", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
-              Topological Signature (Betti)
-            </div>
-            {/* Tuple display: (β₀, β₁, β₂) = (n, n, n) */}
-            <div style={{ fontFamily: "'Georgia', serif", fontSize: 13, marginBottom: 10, color: "#E6E4DF", lineHeight: 1.5 }}>
-              <span style={{ color: "#888C8E" }}>(β₀, β₁, β₂) =</span>{" "}
-              <span style={{ color: "#D19E4A", fontWeight: 700, fontSize: 18 }}>
-                ({(result.topology.betti_numbers[0] ?? 0)},{" "}
-                 {(result.topology.betti_numbers[1] ?? 0)},{" "}
-                 {(result.topology.betti_numbers[2] ?? 0)})
-              </span>
-            </div>
-            {/* Per-number breakdown */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {[
-                { label: "β₀", desc: "Components",  val: result.topology.betti_numbers[0] ?? 0, color: "#6B8075" },
-                { label: "β₁", desc: "1D Holes",     val: result.topology.betti_numbers[1] ?? 0, color: result.topology.betti_numbers[1] ? "#C05640" : "#888C8E" },
-                { label: "β₂", desc: "2D Voids",     val: result.topology.betti_numbers[2] ?? 0, color: result.topology.betti_numbers[2] ? "#D19E4A" : "#888C8E" },
-              ].map(({ label, desc, val, color }) => (
-                <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ color, fontFamily: "'Courier New', monospace", fontSize: 11, fontWeight: 700, minWidth: 20 }}>{label}</span>
-                  <span style={{ color: "#888C8E", fontSize: 10 }}>{desc}</span>
-                  <span style={{ marginLeft: "auto", background: "#2C3133", color, borderRadius: 4, padding: "1px 8px", fontFamily: "'Courier New', monospace", fontSize: 11, fontWeight: 700 }}>{val}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// AlgebraicResultView — invariants + manifold mesh for Algebraic Geometry domain
-// ---------------------------------------------------------------------------
-
-function AlgebraicResultView({
-  algebraicResult,
-  domain,
-  viewMode,
-  setViewMode,
-}: {
-  algebraicResult: AlgebraicResponse;
-  domain: Domain;
-  viewMode: "spectral" | "saliency";
-  setViewMode: (m: "spectral" | "saliency") => void;
-}) {
-  const inv = algebraicResult.invariants;
-
-  return (
-    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Summary cards */}
-      <div style={{ display: "flex", gap: 12 }}>
-        {[
-          { label: "Vertices",  value: inv.num_vertices, color: domain.color },
-          { label: "Faces",     value: inv.num_faces,    color: "#6B8075" },
-          { label: "Edges",     value: algebraicResult.edges.length, color: "#888C8E" },
-        ].map((s) => (
-          <div key={s.label} style={{ flex: 1, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
-            <div style={{ color: s.color, fontSize: 26, fontWeight: 700, fontFamily: "'Georgia', serif", lineHeight: 1, marginBottom: 6 }}>{s.value.toLocaleString()}</div>
-            <div style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Invariants table */}
-      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#1C1F21", overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #2C3133" }}>
-              {["Invariant", "Value", "Mathematical Meaning"].map((h) => (
-                <th key={h} style={{ padding: "10px 14px", color: "#888C8E", fontWeight: 600, fontSize: 10, letterSpacing: "0.08em", textAlign: "left", textTransform: "uppercase" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              { name: "Vertices |V|", value: inv.num_vertices.toLocaleString(), color: domain.color, desc: "Isosurface vertices extracted by Marching Cubes" },
-              { name: "Faces |F|",    value: inv.num_faces.toLocaleString(),    color: "#6B8075",    desc: "Triangular faces of the zero-level set" },
-              { name: "Edges |E|",    value: algebraicResult.edges.length.toLocaleString(), color: "#888C8E", desc: "Wireframe edges (3 per face, deduplicated)" },
-            ].map((row, i, arr) => (
-              <tr key={row.name}
-                style={{ borderBottom: i < arr.length - 1 ? "1px solid #2C3133" : "none" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#22262850"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
-              >
-                <td style={{ padding: "11px 14px", color: "#E6E4DF", fontWeight: 500 }}>{row.name}</td>
-                <td style={{ padding: "11px 14px" }}>
-                  <span style={{ background: "#2C3133", color: row.color, borderRadius: 5, padding: "3px 10px", fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700 }}>
-                    {row.value}
-                  </span>
-                </td>
-                <td style={{ padding: "11px 14px", color: "#888C8E", fontSize: 11, lineHeight: 1.5 }}>{row.desc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 3D Wireframe Visualizer */}
-      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Algebraic Variety · Marching Cubes Isosurface (WebGL)
-          </div>
-          {/* View mode toggle */}
-          <div style={{ display: "flex", background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 8, padding: 3, gap: 2 }}>
-            {(["spectral", "saliency"] as const).map((mode) => {
-              const isActive = viewMode === mode;
-              const labels: Record<string, string> = {
-                spectral: "⟡ Wireframe Variety",
-                saliency: "◈ Highlight Singularities",
-              };
-              return (
-                <button
-                  key={mode}
-                  id={`algebraic-view-toggle-${mode}`}
-                  onClick={() => setViewMode(mode)}
-                  style={{
-                    background: isActive ? (mode === "saliency" ? "#C05640" : domain.color) : "transparent",
-                    border: "none", borderRadius: 6,
-                    color: isActive ? "#E6E4DF" : "#888C8E",
-                    cursor: "pointer", fontSize: 10, fontWeight: isActive ? 700 : 400,
-                    letterSpacing: "0.04em", padding: "5px 12px",
-                    transition: "all 0.2s ease", whiteSpace: "nowrap",
-                  }}
-                >{labels[mode]}</button>
-              );
-            })}
-          </div>
-        </div>
-        {/* Legend */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
-          {(viewMode === "spectral"
-            ? [
-                { color: domain.color, label: "Surface vertex" },
-                { color: "#2C3133",    label: "Wireframe edge", border: `1px solid ${domain.color}60` },
-              ]
-            : [
-                { color: "#C05640", label: "Singular point (‖∇F‖ ≈ 0)" },
-                { color: "#888C8E", label: "Regular point" },
-              ]
-          ).map(({ color, label, border }: { color: string; label: string; border?: string }) => (
-            <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, border, display: "inline-block", flexShrink: 0 }} />
-              {label}
-            </span>
-          ))}
-        </div>
-        <GraphVisualizer
-          nodes={algebraicResult.nodes.map((n) => n.id)}
-          edges={algebraicResult.edges.map((e) => e as (string | number)[])}
-          knotNodes={algebraicResult.nodes.map((n) => ({ id: n.id, fx: n.fx, fy: n.fy, fz: n.fz }))}
-          faces={algebraicResult.faces as [number | string, number | string, number | string][]}
-          saliencyScores={Object.fromEntries(Object.entries(algebraicResult.saliency_scores).map(([k, v]) => [k, v]))}
-          viewMode={viewMode}
-          height={420}
-        />
-      </div>
-
-      {/* ── Exact Algebraic Analysis ── symbolic Jacobian + exact singularities */}
-      {(algebraicResult.jacobian || algebraicResult.exact_singularities) && (
-        <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0D1012", overflow: "hidden" }}>
-          {/* Panel header */}
-          <div style={{ padding: "12px 18px", borderBottom: "1px solid #2C3133", display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ color: domain.color, fontSize: 12 }}>∿</span>
-            <span style={{ color: "#E6E4DF", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-              Exact Algebraic Analysis{" "}
-              <span style={{ color: "#555A5D", fontWeight: 400, textTransform: "none" }}>(Symbolic)</span>
-            </span>
-            <div style={{ flex: 1, height: 1, background: "linear-gradient(to right, #2C3133, transparent)" }} />
-            <span style={{ color: "#3A3F42", fontSize: 9, letterSpacing: "0.08em" }}>SymPy · Gröbner Basis</span>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-            {/* ── LEFT: Jacobian ── */}
-            <div style={{ padding: "18px 20px", borderRight: "1px solid #2C3133" }}>
-              <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14 }}>
-                The Jacobian (∇F)
-              </div>
-              {algebraicResult.jacobian && algebraicResult.jacobian.length === 3 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {(["x", "y", "z"] as const).map((axis, i) => (
-                    <div key={axis} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ color: "#555A5D", fontFamily: "'Georgia', serif", fontSize: 12, flexShrink: 0, width: 60 }}>
-                        ∂F/∂{axis} =
-                      </span>
-                      <code style={{
-                        color: "#E6E4DF",
-                        fontFamily: "'Courier New', monospace",
-                        fontSize: 13,
-                        fontWeight: 600,
-                        background: "#1A1D1F",
-                        border: "1px solid #2C3133",
-                        borderRadius: 6,
-                        padding: "5px 10px",
-                        wordBreak: "break-all",
-                        lineHeight: 1.4,
-                      }}>
-                        {algebraicResult.jacobian[i]}
-                      </code>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <span style={{ color: "#3A3F42", fontSize: 11, fontStyle: "italic" }}>Not available</span>
-              )}
-            </div>
-
-            {/* ── RIGHT: Exact Singularities ── */}
-            <div style={{ padding: "18px 20px" }}>
-              <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14 }}>
-                Rigorous Singularities{" "}
-                <span style={{ color: "#3A3F42", textTransform: "none", letterSpacing: 0 }}>(F = ∇F = 0)</span>
-              </div>
-
-              {!algebraicResult.exact_singularities || algebraicResult.exact_singularities.length === 0 ? (
-                <p style={{ color: "#6B8075", fontFamily: "'Georgia', serif", fontSize: 12, lineHeight: 1.7, fontStyle: "italic", margin: 0 }}>
-                  Smooth Manifold. The Gröbner basis proves no real singularities exist.
-                </p>
-              ) : algebraicResult.exact_singularities[0]?.error ? (
-                <div style={{ color: "#888C8E", fontFamily: "'Courier New', monospace", fontSize: 11, lineHeight: 1.5, background: "#1A1D1F", border: "1px solid #2C3133", borderRadius: 6, padding: "10px 12px" }}>
-                  ⚠ {algebraicResult.exact_singularities[0].error}
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {algebraicResult.exact_singularities.map((sol, i) => (
-                    <div key={i} style={{ background: "#C0564008", border: "1px solid #C0564044", borderRadius: 7, padding: "9px 12px", display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ color: "#C0564066", fontSize: 9, fontWeight: 700, fontFamily: "'Courier New', monospace", flexShrink: 0 }}>
-                        P{(i + 1).toString().padStart(2, "0")}
-                      </span>
-                      <code style={{ color: "#C05640", fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 600 }}>
-                        ({["x", "y", "z"].map((v) => sol[v] ?? "?").join(", ")})
-                      </code>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// CircuitResultView — invariants + DAG visualizer for Complexity Theory domain
-// ---------------------------------------------------------------------------
-
-function CircuitResultView({
-  circuitResult,
-  domain,
-  viewMode,
-  setViewMode,
-}: {
-  circuitResult: CircuitResponse;
-  domain: Domain;
-  viewMode: "spectral" | "saliency";
-  setViewMode: (m: "spectral" | "saliency") => void;
-}) {
-  const inv = circuitResult.invariants;
-  const rows = [
-    { name: "Circuit Depth", value: inv.depth, color: "#C05640", desc: "Longest path (time complexity)" },
-    { name: "Logic Gates", value: inv.num_gates, color: "#D19E4A", desc: "Total AND · OR · NOT · XOR count" },
-    { name: "Input Variables", value: inv.num_vars, color: "#6B8075", desc: "Number of distinct boolean variables" },
-  ];
-  return (
-    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Summary cards */}
-      <div style={{ display: "flex", gap: 12 }}>
-        {[
-          { label: "Depth",  value: inv.depth,     color: "#C05640" },
-          { label: "Gates",  value: inv.num_gates,  color: "#D19E4A" },
-          { label: "Vars",   value: inv.num_vars,   color: "#6B8075" },
-        ].map((s) => (
-          <div key={s.label} style={{ flex: 1, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
-            <div style={{ color: s.color, fontSize: 26, fontWeight: 700, fontFamily: "'Georgia', serif", lineHeight: 1, marginBottom: 6 }}>{s.value}</div>
-            <div style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Invariants table */}
-      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#1C1F21", overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #2C3133" }}>
-              {["Invariant", "Value", "Mathematical Meaning"].map((h) => (
-                <th key={h} style={{ padding: "10px 14px", color: "#888C8E", fontWeight: 600, fontSize: 10, letterSpacing: "0.08em", textAlign: "left", textTransform: "uppercase" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => (
-              <tr key={row.name}
-                style={{ borderBottom: i < rows.length - 1 ? "1px solid #2C3133" : "none", transition: "background 0.1s" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#22262850"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
-              >
-                <td style={{ padding: "11px 14px", color: "#E6E4DF", fontWeight: 500, whiteSpace: "nowrap" }}>{row.name}</td>
-                <td style={{ padding: "11px 14px" }}>
-                  <span style={{ background: "#2C3133", color: row.color, borderRadius: 5, padding: "3px 10px", fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
-                    {String(row.value)}
-                  </span>
-                </td>
-                <td style={{ padding: "11px 14px", color: "#888C8E", fontSize: 11, lineHeight: 1.5 }}>{row.desc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* DAG Visualizer */}
-      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Boolean Circuit · Directed Acyclic Graph (WebGL)
-          </div>
-          {/* View mode toggle */}
-          <div style={{ display: "flex", background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 8, padding: 3, gap: 2 }}>
-            {(["spectral", "saliency"] as const).map((mode) => {
-              const isActive = viewMode === mode;
-              const labels: Record<string, string> = {
-                spectral: "⟡ Gate Types",
-                saliency: "◈ Critical Path",
-              };
-              return (
-                <button
-                  key={mode}
-                  id={`circuit-view-toggle-${mode}`}
-                  onClick={() => setViewMode(mode)}
-                  style={{
-                    background: isActive ? (mode === "saliency" ? "#C05640" : "#6B8075") : "transparent",
-                    border: "none", borderRadius: 6,
-                    color: isActive ? "#E6E4DF" : "#888C8E",
-                    cursor: "pointer", fontSize: 10, fontWeight: isActive ? 700 : 400,
-                    letterSpacing: "0.04em", padding: "5px 12px",
-                    transition: "all 0.2s ease", whiteSpace: "nowrap",
-                  }}
-                >{labels[mode]}</button>
-              );
-            })}
-          </div>
-        </div>
-        {/* Legend */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
-          {(viewMode === "spectral"
-            ? [
-                { color: "#E6E4DF", label: "VAR (input)" },
-                { color: "#D19E4A", label: "AND" },
-                { color: "#6B8075", label: "OR" },
-                { color: "#888C8E", label: "NOT / XOR" },
-              ]
-            : [
-                { color: "#C05640", label: "Critical path (bottleneck)" },
-                { color: "#1C1F21", label: "Off-path gate", border: "1px solid #2C3133" },
-              ]
-          ).map(({ color, label, border }: { color: string; label: string; border?: string }) => (
-            <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, border, display: "inline-block", flexShrink: 0 }} />
-              {label}
-            </span>
-          ))}
-        </div>
-        <GraphVisualizer
-          nodes={circuitResult.nodes.map((n) => n.id)}
-          edges={circuitResult.edges.map((e) => e as (string | number)[])}
-          saliencyScores={circuitResult.saliency_scores}
-          gateTypes={Object.fromEntries(circuitResult.nodes.map((n) => [n.id, n.gate_type]))}
-          viewMode={viewMode}
-          height={400}
-          domain="circuit"
-        />
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// ManifoldResultView — invariants + 3D mesh for Topology domain
-// ---------------------------------------------------------------------------
-
-function ManifoldResultView({
-  manifoldResult,
-  domain,
-  viewMode,
-  setViewMode,
-  onNodeRemove,
-}: {
-  manifoldResult: ManifoldResponse;
-  domain: Domain;
-  viewMode: "spectral" | "saliency";
-  setViewMode: (m: "spectral" | "saliency") => void;
-  onNodeRemove?: (nodeId: string | number) => void;
-}) {
-  const inv = manifoldResult.invariants;
-  const rows = [
-    { name: "Vertices V",          value: inv.vertices,           color: "#D19E4A",   desc: "Mesh vertex count" },
-    { name: "Edges E",             value: inv.edges,              color: "#C05640",   desc: "Mesh edge count" },
-    { name: "Euler Characteristic", value: inv.euler_characteristic, color: inv.euler_characteristic === 2 ? "#6B8075" : "#D19E4A", desc: "χ = V − E + F  (Sphere: 2, Torus: 0)" },
-  ];
-  return (
-    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Summary cards */}
-      <div style={{ display: "flex", gap: 12 }}>
-        {[
-          { label: "V",  value: inv.vertices,             color: "#D19E4A" },
-          { label: "E",  value: inv.edges,                color: "#C05640" },
-          { label: "χ",  value: inv.euler_characteristic, color: inv.euler_characteristic === 2 ? "#6B8075" : "#D19E4A" },
-        ].map((s) => (
-          <div key={s.label} style={{ flex: 1, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
-            <div style={{ color: s.color, fontSize: 26, fontWeight: 700, fontFamily: "'Georgia', serif", lineHeight: 1, marginBottom: 6 }}>{s.value}</div>
-            <div style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Invariants table */}
-      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#1C1F21", overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #2C3133" }}>
-              {["Invariant", "Value", "Mathematical Meaning"].map((h) => (
-                <th key={h} style={{ padding: "10px 14px", color: "#888C8E", fontWeight: 600, fontSize: 10, letterSpacing: "0.08em", textAlign: "left", textTransform: "uppercase" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => (
-              <tr key={row.name}
-                style={{ borderBottom: i < rows.length - 1 ? "1px solid #2C3133" : "none", transition: "background 0.1s" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#22262850"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
-              >
-                <td style={{ padding: "11px 14px", color: "#E6E4DF", fontWeight: 500, whiteSpace: "nowrap" }}>{row.name}</td>
-                <td style={{ padding: "11px 14px" }}>
-                  <span style={{ background: "#2C3133", color: row.color, borderRadius: 5, padding: "3px 10px", fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
-                    {String(row.value)}
-                  </span>
-                </td>
-                <td style={{ padding: "11px 14px", color: "#888C8E", fontSize: 11, lineHeight: 1.5 }}>{row.desc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 3D Manifold Visualizer */}
-      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Manifold Mesh · Laplacian Harmonics (WebGL)
-          </div>
-          {/* View mode toggle */}
-          <div style={{ display: "flex", background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 8, padding: 3, gap: 2 }}>
-            {(["spectral", "saliency"] as const).map((mode) => {
-              const isActive = viewMode === mode;
-              const labels: Record<string, string> = {
-                spectral: "⟡ Base Geometry",
-                saliency: "◈ Spectral Harmonics",
-              };
-              return (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  style={{
-                    background: isActive ? (mode === "saliency" ? "#C05640" : "#6B8075") : "transparent",
-                    border: "none", borderRadius: 6,
-                    color: isActive ? "#E6E4DF" : "#888C8E",
-                    cursor: "pointer", fontSize: 10, fontWeight: isActive ? 700 : 400,
-                    letterSpacing: "0.04em", padding: "5px 12px",
-                    transition: "all 0.2s ease", whiteSpace: "nowrap",
-                  }}
-                >{labels[mode]}</button>
-              );
-            })}
-          </div>
-        </div>
-        {/* Legend */}
-        <div style={{ display: "flex", gap: 14, marginBottom: 8, flexWrap: "wrap" }}>
-          {(viewMode === "saliency"
-            ? [{ color: "#C05640", label: "+ amplitude" }, { color: "#D19E4A", label: "≈ nodal line" }, { color: "#6B8075", label: "− amplitude" }]
-            : [{ color: "#6B8075", label: "Mesh vertices" }]
-          ).map(({ color, label }) => (
-            <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
-              {label}
-            </span>
-          ))}
-        </div>
-        <GraphVisualizer
-          nodes={[]}
-          edges={manifoldResult.edges.map((e) => e as (string | number)[])}
-          knotNodes={manifoldResult.nodes}
-          faces={manifoldResult.faces}
-          harmonics={manifoldResult.harmonics}
-          viewMode={viewMode}
-          height={440}
-          onNodeRemove={onNodeRemove}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Microscope wrapper
-// ---------------------------------------------------------------------------
-
-function KnotResultView({
-  knotResult,
-  domain,
-  viewMode,
-  setViewMode,
-}: {
-  knotResult: KnotResponse;
-  domain: Domain;
-  viewMode: "spectral" | "saliency";
-  setViewMode: (m: "spectral" | "saliency") => void;
-}) {
-  const inv = knotResult.invariants;
-  const rows = [
-    { name: "Knot Type",       value: inv.type,             color: domain.color,  desc: "Family of knot / link" },
-    { name: "Parameters (p,q)",value: `(${inv.p}, ${inv.q})`, color: "#D19E4A",  desc: "Torus knot winding numbers" },
-    { name: "Crossing Number", value: inv.crossing_number,  color: "#C05640",    desc: "Minimum crossings over all diagrams" },
-    { name: "Strand Count",    value: knotResult.nodes.length, color: "#6B8075", desc: "Parametric sample points" },
-    { name: "Writhe (Gauss)",  value: inv.writhe != null ? inv.writhe.toFixed(4) : "—", color: "#D19E4A",  desc: "Discrete Gauss linking integral" },
-  ];
-
-  return (
-    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Summary cards */}
-      <div style={{ display: "flex", gap: 12 }}>
-        {[
-          { label: "p",           value: inv.p,              color: "#D19E4A" },
-          { label: "q",           value: inv.q,              color: "#6B8075" },
-          { label: "Crossings c", value: inv.crossing_number, color: "#C05640" },
-          { label: "Writhe",      value: inv.writhe != null ? inv.writhe.toFixed(2) : "—", color: "#D19E4A" },
-        ].map((s) => (
-          <div key={s.label} style={{ flex: 1, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
-            <div style={{ color: s.color, fontSize: 26, fontWeight: 700, fontFamily: "'Georgia', serif", lineHeight: 1, marginBottom: 6 }}>{s.value}</div>
-            <div style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Invariants table */}
-      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#1C1F21", overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid #2C3133" }}>
-              {["Invariant", "Value", "Mathematical Meaning"].map((h) => (
-                <th key={h} style={{ padding: "10px 14px", color: "#888C8E", fontWeight: 600, fontSize: 10, letterSpacing: "0.08em", textAlign: "left", textTransform: "uppercase" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => (
-              <tr key={row.name}
-                style={{ borderBottom: i < rows.length - 1 ? "1px solid #2C3133" : "none", transition: "background 0.1s" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "#22262850"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
-              >
-                <td style={{ padding: "11px 14px", color: "#E6E4DF", fontWeight: 500, whiteSpace: "nowrap" }}>{row.name}</td>
-                <td style={{ padding: "11px 14px" }}>
-                  <span style={{ background: "#2C3133", color: row.color, borderRadius: 5, padding: "3px 10px", fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
-                    {String(row.value)}
-                  </span>
-                </td>
-                <td style={{ padding: "11px 14px", color: "#888C8E", fontSize: 11, lineHeight: 1.5 }}>{row.desc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 3D Knot Visualizer */}
-      <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ color: "#888C8E", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Torus Knot · 3D Parametric Curve (WebGL)
-          </div>
-          {/* View Mode Toggle */}
-          <div
-            style={{
-              display: "flex",
-              background: "#1C1F21",
-              border: "1px solid #2C3133",
-              borderRadius: 8,
-              padding: 3,
-              gap: 2,
-            }}
-          >
-            {(["spectral", "saliency"] as const).map((mode) => {
-              const isActive = viewMode === mode;
-              const labels: Record<string, string> = {
-                spectral: "⟡ Parametric Base",
-                saliency: "◈ Gradient Saliency",
-              };
-              return (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  style={{
-                    background: isActive
-                      ? mode === "saliency" ? "#C05640" : "#6B8075"
-                      : "transparent",
-                    border: "none",
-                    borderRadius: 6,
-                    color: isActive ? "#E6E4DF" : "#888C8E",
-                    cursor: "pointer",
-                    fontSize: 10,
-                    fontWeight: isActive ? 700 : 400,
-                    letterSpacing: "0.04em",
-                    padding: "5px 12px",
-                    transition: "all 0.2s ease",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {labels[mode]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 16, marginBottom: 8 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
-            <span style={{ width: 18, height: 3, background: "#C05640", display: "inline-block", borderRadius: 2, flexShrink: 0 }} />
-            Knot strand
-          </span>
-          {viewMode === "spectral" ? (
-            <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E" }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#6B8075", display: "inline-block", flexShrink: 0 }} />
-              Sample point
-            </span>
-          ) : (
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              {[
-                { color: "#C05640", label: "High Entanglement (> 0.6)" },
-                { color: "#D19E4A", label: "Medium (0.3–0.6)" },
-                { color: "#1C1F21", label: "Low (< 0.3)", border: "1px solid #2C3133" },
-              ].map(({ color, label, border }) => (
-                <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "#888C8E", letterSpacing: "0.04em" }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, border, display: "inline-block", flexShrink: 0 }} />
-                  {label}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-        <GraphVisualizer
-          nodes={[]}
-          edges={knotResult.edges.map((e) => e as (string | number)[])}
-          knotNodes={knotResult.nodes}
-          saliencyScores={knotResult.saliency_scores ?? {}}
-          viewMode={viewMode}
-          height={400}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// TDAResultView — 3D Point Cloud and Persistent Homology Barcode
-// ---------------------------------------------------------------------------
-
-function TDAResultView({
-  tdaResult,
-  domain,
-}: {
-  tdaResult: TDAResponse;
-  domain: Domain;
-}) {
-  const h0Count = tdaResult.barcodes?.H0?.length ?? 0;
-  const h1Count = tdaResult.barcodes?.H1?.length ?? 0;
-
-  return (
-    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Summary metric cards */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {[
-          { label: "Point Cloud |X|", value: tdaResult.nodes.length, color: "#E6E4DF" },
-          { label: "H₀ Components", value: h0Count, color: "#6B8075" },
-          { label: "H₁ Loops", value: h1Count, color: "#C05640" },
-          { label: "Metric Space", value: "ℝ³ Euclidean", color: "#D19E4A" },
-        ].map((card) => (
-          <div
-            key={card.label}
-            style={{
-              flex: 1,
-              minWidth: 140,
-              background: "#1C1F21",
-              border: "1px solid #2C3133",
-              borderRadius: 10,
-              padding: "14px 16px",
-              textAlign: "center",
-            }}
-          >
-            <div
-              style={{
-                color: card.color,
-                fontSize: 24,
-                fontWeight: 700,
-                fontFamily: "'Georgia', serif",
-                lineHeight: 1,
-                marginBottom: 6,
-              }}
-            >
-              {card.value}
-            </div>
-            <div
-              style={{
-                color: "#888C8E",
-                fontSize: 10,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              {card.label}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* 3D Point Cloud Visualizer (no edges) */}
-      <div
-        style={{
-          border: "1px solid #2C3133",
-          borderRadius: 10,
-          background: "#0F1113",
-          padding: "14px 14px 10px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 10,
-          }}
-        >
-          <div
-            style={{
-              color: "#888C8E",
-              fontSize: 9,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              fontWeight: 600,
-            }}
-          >
-            3D Point Cloud Metric Space (WebGL) · {tdaResult.nodes.length} Nodes
-          </div>
-          <span style={{ color: "#555A5D", fontSize: 9 }}>
-            Orbit: Left drag · Pan: Right drag · Zoom: Wheel
-          </span>
-        </div>
-
-        <GraphVisualizer
-          nodes={tdaResult.nodes.map((n) => n.id)}
-          edges={[]}
-          knotNodes={tdaResult.nodes}
-          viewMode="spectral"
-          height={380}
-        />
-      </div>
-
-      {/* Persistence Barcode Visualizer */}
-      <BarcodeVisualizer barcodes={tdaResult.barcodes} />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// WLResultView — Twin Test (Weisfeiler-Lehman Isomorphism Test)
-// ---------------------------------------------------------------------------
-
-function WLResultView({
-  wlResult,
-  wlStep,
-  setWlStep,
-}: {
-  wlResult: WLResponse;
-  wlStep: number;
-  setWlStep: (s: number) => void;
-}) {
-  const maxSteps = wlResult.wl_steps1.length - 1;
-  const isIsomorphic = wlResult.is_isomorphic;
-
-  return (
-    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Badge */}
-      <div style={{ background: isIsomorphic ? "#6B807520" : "#C0564020", border: `1px solid ${isIsomorphic ? "#6B8075" : "#C05640"}`, borderRadius: 10, padding: "16px 20px", textAlign: "center" }}>
-        <div style={{ color: isIsomorphic ? "#6B8075" : "#C05640", fontSize: 20, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-          Result: {isIsomorphic ? "ISOMORPHIC (Mathematical Twins)" : "NON-ISOMORPHIC"}
-        </div>
-      </div>
-
-      {/* Split-screen graphs */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
-          <div style={{ color: "#888C8E", fontSize: 10, marginBottom: 10, textAlign: "center", textTransform: "uppercase", letterSpacing: "0.08em" }}>Graph A</div>
-          <GraphVisualizer
-            nodes={wlResult.graph1_nodes.map(n => n.id)}
-            edges={wlResult.graph1_edges as (string | number)[][]}
-            wlColors={wlResult.wl_steps1[wlStep]}
-            viewMode="spectral"
-            height={300}
-          />
-        </div>
-        <div style={{ border: "1px solid #2C3133", borderRadius: 10, background: "#0F1113", padding: "14px 14px 10px" }}>
-          <div style={{ color: "#888C8E", fontSize: 10, marginBottom: 10, textAlign: "center", textTransform: "uppercase", letterSpacing: "0.08em" }}>Graph B</div>
-          <GraphVisualizer
-            nodes={wlResult.graph2_nodes.map(n => n.id)}
-            edges={wlResult.graph2_edges as (string | number)[][]}
-            wlColors={wlResult.wl_steps2[wlStep]}
-            viewMode="spectral"
-            height={300}
-          />
-        </div>
-      </div>
-
-      {/* Playback Control */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 10, padding: "14px 20px" }}>
-        <div style={{ color: "#E6E4DF", fontSize: 13, fontWeight: 600 }}>WL Iteration Step: <span style={{ color: "#D19E4A" }}>{wlStep}</span> of {maxSteps}</div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={() => setWlStep(0)} disabled={wlStep === 0} style={{ background: "#2C3133", border: "none", borderRadius: 6, color: wlStep === 0 ? "#555A5D" : "#E6E4DF", padding: "6px 14px", cursor: wlStep === 0 ? "not-allowed" : "pointer", transition: "all 0.15s" }}>Reset</button>
-          <button onClick={() => setWlStep(wlStep + 1)} disabled={wlStep >= maxSteps} style={{ background: wlStep >= maxSteps ? "#2C3133" : "#D19E4A", border: "none", borderRadius: 6, color: wlStep >= maxSteps ? "#555A5D" : "#111315", padding: "6px 14px", fontWeight: 600, cursor: wlStep >= maxSteps ? "not-allowed" : "pointer", transition: "all 0.15s" }}>Next Iteration</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Microscope({
-  result,
-  knotResult,
-  manifoldResult,
-  circuitResult,
-  algebraicResult,
-  batchData,
-  tdaResult,
-  wlResult,
-  wlStep,
-  setWlStep,
-  conjectures,
-  domain,
-  error,
-  viewMode,
-  setViewMode,
-  onEdgeRemove,
-  onNodeRemove,
-  perturbationCount,
-  deletedEdges,
-}: {
-  result: MathResponse | null;
-  knotResult: KnotResponse | null;
-  manifoldResult: ManifoldResponse | null;
-  circuitResult: CircuitResponse | null;
-  algebraicResult: AlgebraicResponse | null;
-  batchData: BatchDataPoint[] | null;
-  tdaResult: TDAResponse | null;
-  wlResult: WLResponse | null;
-  wlStep: number;
-  setWlStep: (s: number) => void;
-  conjectures: string[] | null;
-  domain: Domain;
-  error: string | null;
-  viewMode: "spectral" | "saliency";
-  setViewMode: (m: "spectral" | "saliency") => void;
-  onEdgeRemove?: (source: string | number, target: string | number) => void;
-  onNodeRemove?: (nodeId: string | number) => void;
-  perturbationCount?: number;
-  deletedEdges?: (string | number)[][];
-}) {
-  const isKnotDomain = domain.id === "knot";
-  const isTopooDomain = domain.id === "topology";
-  const isCircuitDomain = domain.id === "circuit";
-  const isAlgebraicDomain = domain.id === "algebraic-geometry";
-  const isBatchDomain = domain.id === "batch-explorer";
-  const isTDADomain = domain.id === "tda";
-  const isWLDomain = domain.id === "wl_test";
-  const hasResult = !!(result || knotResult || manifoldResult || circuitResult || algebraicResult || batchData || tdaResult || wlResult);
-  return (
-    <div style={{ background: "#111315", border: "1px solid #2C3133", borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 400 }}>
-      <div style={{ padding: "12px 18px", borderBottom: "1px solid #2C3133", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ color: domain.color, fontSize: 14 }}>◉</span>
-          <span style={{ color: "#E6E4DF", fontSize: 12, fontWeight: 600, letterSpacing: "0.06em" }}>
-            {isBatchDomain ? "BATCH ANALYSIS" : isWLDomain ? "TWIN TEST RESULTS" : "STRUCTURE MICROSCOPE"}
-          </span>
-        </div>
-        {result && !isKnotDomain && !isTopooDomain && !isCircuitDomain && !isAlgebraicDomain && !isBatchDomain && !isTDADomain && !isWLDomain && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ background: "#6B807520", border: "1px solid #6B8075", color: "#6B8075", borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
-              {result.metadata.num_nodes}V · {result.metadata.num_edges}E
-            </span>
-            {perturbationCount !== undefined && perturbationCount > 0 && (
-              <span
-                title={`${perturbationCount} edge${perturbationCount === 1 ? "" : "s"} removed by interactive perturbation`}
-                style={{ background: "#C0564020", border: "1px solid #C05640", color: "#C05640", borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", animation: "pulse 1.8s ease-in-out 1" }}
-              >−{perturbationCount}E perturbed</span>
-            )}
-          </div>
-        )}
-        {knotResult && isKnotDomain && (
-          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
-            Torus Knot · {knotResult.nodes.length} pts
-          </span>
-        )}
-        {manifoldResult && isTopooDomain && (
-          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
-            {manifoldResult.nodes.length}V · χ = {manifoldResult.invariants.euler_characteristic}
-          </span>
-        )}
-        {circuitResult && isCircuitDomain && (
-          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
-            Depth {circuitResult.invariants.depth} · {circuitResult.invariants.num_gates} gates
-          </span>
-        )}
-        {algebraicResult && isAlgebraicDomain && (
-          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
-            {algebraicResult.invariants.num_vertices.toLocaleString()}V · {algebraicResult.invariants.num_faces.toLocaleString()}F
-          </span>
-        )}
-        {batchData && isBatchDomain && (
-          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
-            Samples: {batchData.length}
-          </span>
-        )}
-        {tdaResult && isTDADomain && (
-          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
-            TDA · {tdaResult.nodes.length} pts · H₁: {tdaResult.barcodes.H1.length} loops
-          </span>
-        )}
-        {wlResult && isWLDomain && (
-          <span style={{ background: `${domain.color}20`, border: `1px solid ${domain.color}`, color: domain.color, borderRadius: 6, padding: "2px 10px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em" }}>
-            Twin Test
-          </span>
-        )}
-      </div>
-      <div style={{ flex: 1, display: "flex", alignItems: error || !hasResult ? "center" : "flex-start", justifyContent: error || !hasResult ? "center" : "flex-start", padding: 24, overflowY: "auto" }}>
-        {error ? (
-          <div style={{ textAlign: "center", maxWidth: 420 }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>⚠</div>
-            <div style={{ color: "#C05640", fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Parse / Computation Error</div>
-            <div style={{ color: "#888C8E", fontSize: 12, lineHeight: 1.7, background: "#1C1F21", border: "1px solid #C0564030", borderRadius: 8, padding: "12px 16px", fontFamily: "'Courier New', monospace", textAlign: "left" }}>{error}</div>
-          </div>
-        ) : isTopooDomain ? (
-          manifoldResult ? (
-            <ManifoldResultView manifoldResult={manifoldResult} domain={domain} viewMode={viewMode} setViewMode={setViewMode} onNodeRemove={onNodeRemove} />
-          ) : (
-            <EmptyMicroscope domain={domain} />
-          )
-        ) : isKnotDomain ? (
-          knotResult ? (
-            <KnotResultView knotResult={knotResult} domain={domain} viewMode={viewMode} setViewMode={setViewMode} />
-          ) : (
-            <EmptyMicroscope domain={domain} />
-          )
-        ) : isCircuitDomain ? (
-          circuitResult ? (
-            <CircuitResultView circuitResult={circuitResult} domain={domain} viewMode={viewMode} setViewMode={setViewMode} />
-          ) : (
-            <EmptyMicroscope domain={domain} />
-          )
-        ) : isAlgebraicDomain ? (
-          algebraicResult ? (
-            <AlgebraicResultView algebraicResult={algebraicResult} domain={domain} viewMode={viewMode} setViewMode={setViewMode} />
-          ) : (
-            <EmptyMicroscope domain={domain} />
-          )
-        ) : isBatchDomain ? (
-          batchData ? (
-            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
-              {/* Conjectures card — rendered when Oracle has run */}
-              {conjectures && conjectures.length > 0 && (
-                <div style={{
-                  background: "linear-gradient(135deg, #D19E4A08, #D19E4A04)",
-                  border: "1px solid #D19E4A55",
-                  borderRadius: 12,
-                  padding: "20px 24px",
-                  boxShadow: "0 0 40px #D19E4A18, inset 0 1px 0 #D19E4A22",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                    <span style={{ fontSize: 18 }}>🔮</span>
-                    <span style={{ color: "#D19E4A", fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>
-                      Discovered Theorems
-                    </span>
-                    <div style={{ flex: 1, height: 1, background: "linear-gradient(to right, #D19E4A44, transparent)" }} />
-                    <span style={{ color: "#D19E4A66", fontSize: 9, letterSpacing: "0.08em" }}>SVD · Null Space Analysis</span>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    {conjectures.map((c, i) => (
-                      <div key={i} style={{
-                        background: "#D19E4A0A",
-                        border: "1px solid #D19E4A33",
-                        borderRadius: 8,
-                        padding: "14px 18px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 16,
-                      }}>
-                        <span style={{ color: "#D19E4A55", fontSize: 10, fontWeight: 700, fontFamily: "'Courier New', monospace", flexShrink: 0 }}>
-                          Thm {(i + 1).toString().padStart(2, "0")}
-                        </span>
-                        <span style={{
-                          color: "#E6E4DF",
-                          fontFamily: "'Courier New', monospace",
-                          fontSize: 15,
-                          fontWeight: 600,
-                          letterSpacing: "0.04em",
-                          wordBreak: "break-all",
-                        }}>
-                          {c}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ marginTop: 14, color: "#888C8E55", fontSize: 9, letterSpacing: "0.06em", textAlign: "right" }}>
-                    Derived from {batchData.length} graph samples via Singular Value Decomposition
-                  </div>
-                </div>
-              )}
-              <BatchVisualizer data={batchData} />
-            </div>
-          ) : (
-            <EmptyMicroscope domain={domain} />
-          )
-        ) : isTDADomain ? (
-          tdaResult ? (
-            <TDAResultView tdaResult={tdaResult} domain={domain} />
-          ) : (
-            <EmptyMicroscope domain={domain} />
-          )
-        ) : isWLDomain ? (
-          wlResult ? (
-            <WLResultView wlResult={wlResult} wlStep={wlStep} setWlStep={setWlStep} />
-          ) : (
-            <EmptyMicroscope domain={domain} />
-          )
-        ) : result ? (
-          <ResultView result={result} domain={domain} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={onEdgeRemove} deletedEdges={deletedEdges} />
-        ) : (
-          <EmptyMicroscope domain={domain} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Right Parameters Panel
-// ---------------------------------------------------------------------------
-
-function RightPanel({
-  domain, params, setParams, isOpen, setIsOpen,
-  history,
-  currentEdges,
-}: {
-  domain: Domain;
-  params: Record<string, number>;
-  setParams: (p: Record<string, number>) => void;
-  isOpen: boolean;
-  setIsOpen: (v: boolean) => void;
-  history: { id: string; type: "genesis" | "cut"; detail: string }[];
-  currentEdges: (string | number)[][];
-}) {
-  const [isExporting, setIsExporting] = useState(false);
-
-  const handleExport = useCallback(async () => {
-    if (currentEdges.length === 0) return;
-    setIsExporting(true);
-    try {
-      const rawData = currentEdges.map(([u, v]) => `${u} ${v}`).join("\n");
-      const request: MathRequest = { input_type: "edge_list", raw_data: rawData };
-      await exportToPython(request);
-    } catch (err) {
-      console.error("[Export] Failed:", err);
-    } finally {
-      setIsExporting(false);
-    }
-  }, [currentEdges]);
-
-  const sliders = [
-    { key: "max_filtration_radius", label: "Max Filtration Radius", min: 0.1, max: 5, step: 0.1, description: "Controls the Cech/Vietoris-Rips complex scale" },
-    { key: "gnn_layers", label: "GNN Layers", min: 1, max: 10, step: 1, description: "Depth of the graph neural network" },
-    { key: "persistence_threshold", label: "Persistence Threshold", min: 0, max: 1, step: 0.01, description: "Minimum lifetime for topological features" },
-    { key: "homology_degree", label: "Homology Degree", min: 0, max: 3, step: 1, description: "Maximum Betti number dimension to compute" },
-  ];
-  const defaultVal = (key: string) => key === "max_filtration_radius" ? 1.5 : key === "gnn_layers" ? 3 : key === "persistence_threshold" ? 0.1 : 1;
-
-  return (
-    <div style={{ width: isOpen ? 280 : 44, minWidth: isOpen ? 280 : 44, flexShrink: 0, background: "#1C1F21", borderLeft: "1px solid #2C3133", transition: "width 0.25s ease, min-width 0.25s ease", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <button id="params-toggle-btn" onClick={() => setIsOpen(!isOpen)} title={isOpen ? "Collapse" : "Expand advanced parameters"}
-        style={{ background: "transparent", border: "none", borderBottom: "1px solid #2C3133", color: "#888C8E", cursor: "pointer", padding: "14px", display: "flex", alignItems: "center", justifyContent: isOpen ? "space-between" : "center", gap: 8, transition: "color 0.15s", whiteSpace: "nowrap", overflow: "hidden", minHeight: 48 }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#E6E4DF"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#888C8E"; }}
-      >
-        {isOpen && <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "#888C8E", textTransform: "uppercase" }}>Advanced Parameters</span>}
-        <span style={{ fontSize: 16, transform: isOpen ? "rotate(0deg)" : "rotate(180deg)", transition: "transform 0.25s" }}>⟩</span>
-      </button>
-
-      {isOpen && (
-        <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: 20, overflowY: "auto" }}>
-
-          {/* ── Perturbation Ledger ──────────────────────────────────────── */}
-          {history.length > 0 && (
-            <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                  ⊕ Perturbation Ledger
-                </span>
-                <button
-                  id="export-python-btn"
-                  onClick={handleExport}
-                  disabled={isExporting || currentEdges.length === 0}
-                  title="Export current graph state to a Python script"
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    background: "transparent",
-                    border: "1px solid #2C3133",
-                    borderRadius: 6,
-                    color: isExporting ? "#444" : "#888C8E",
-                    cursor: isExporting || currentEdges.length === 0 ? "not-allowed" : "pointer",
-                    fontSize: 9, fontWeight: 600, letterSpacing: "0.08em",
-                    padding: "4px 8px",
-                    textTransform: "uppercase",
-                    transition: "color 0.15s, border-color 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isExporting && currentEdges.length > 0) {
-                      (e.currentTarget as HTMLButtonElement).style.color = "#E6E4DF";
-                      (e.currentTarget as HTMLButtonElement).style.borderColor = "#6B8075";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.color = "#888C8E";
-                    (e.currentTarget as HTMLButtonElement).style.borderColor = "#2C3133";
-                  }}
-                >
-                  <Download size={9} strokeWidth={2.5} />
-                  {isExporting ? "Exporting…" : ".py"}
-                </button>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                {history.map((entry, i) => {
-                  const isGenesis = entry.type === "genesis";
-                  const color = isGenesis ? "#6B8075" : "#C05640";
-                  const isLast = i === history.length - 1;
-                  return (
-                    <div key={entry.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-                        <div style={{
-                          width: 10, height: 10, borderRadius: "50%",
-                          background: color, flexShrink: 0,
-                          boxShadow: `0 0 6px ${color}88`,
-                          marginTop: 2,
-                        }} />
-                        {!isLast && (
-                          <div style={{ width: 1, flex: 1, background: "#2C3133", minHeight: 18, marginTop: 2 }} />
-                        )}
-                      </div>
-                      <div style={{ paddingBottom: isLast ? 0 : 14 }}>
-                        <div style={{ color, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", lineHeight: 1 }}>
-                          {isGenesis ? "GENESIS" : "CUT"}
-                        </div>
-                        <div style={{ color: "#888C8E", fontSize: 9, marginTop: 3, lineHeight: 1.5, fontFamily: "'Courier New', monospace" }}>
-                          {entry.detail}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── Advanced parameter sliders ────────────────────────────────── */}
-          <div>
-            <div style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
-              ⊙ Advanced Parameters
-            </div>
-            {sliders.map((s) => (
-              <div key={s.key} style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ color: "#E6E4DF", fontSize: 11, fontWeight: 500 }}>{s.label}</span>
-                  <span style={{ color: domain.color, fontSize: 11, fontFamily: "'Courier New', monospace", fontWeight: 700 }}>{params[s.key] ?? defaultVal(s.key)}</span>
-                </div>
-                <input id={`param-${s.key}`} type="range" min={s.min} max={s.max} step={s.step} value={params[s.key] ?? defaultVal(s.key)}
-                  onChange={(e) => setParams({ ...params, [s.key]: parseFloat(e.target.value) })}
-                  style={{ width: "100%", accentColor: domain.color, cursor: "pointer" }}
-                />
-                <div style={{ color: "#888C8E", fontSize: 9, marginTop: 4, lineHeight: 1.5 }}>{s.description}</div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ padding: "12px", background: "#141617", borderRadius: 8, border: "1px solid #2C3133" }}>
-            <div style={{ color: "#888C8E", fontSize: 9, lineHeight: 1.7 }}>
-              <span style={{ color: domain.color, fontWeight: 600 }}>Professor mode</span><br />
-              These parameters will tune the persistent homology pipeline and GNN architecture in Step 3.
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Main Page
-// ---------------------------------------------------------------------------
+import { Domain, DOMAINS, InputMode } from "@/types/domain";
+import { Sidebar } from "@/components/Sidebar";
+import { Microscope } from "@/components/Microscope";
+import { RightPanel } from "@/components/RightPanel";
+import {
+  Dropzone,
+  AlgebraicDropzone,
+  CircuitDropzone,
+  KnotDropzone,
+  TDADropzone,
+  WLDropzone,
+  ManifoldDropzone,
+} from "@/components/dropzones";
+import { ViewMode } from "@/components/GraphVisualizer";
 
 export default function HomePage() {
   const [selectedDomain, setSelectedDomain] = useState<Domain>(DOMAINS[1]);
@@ -2514,10 +66,12 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [paramsOpen, setParamsOpen] = useState(false);
   const [params, setParams] = useState<Record<string, number>>({
-    max_filtration_radius: 1.5, gnn_layers: 3,
-    persistence_threshold: 0.1, homology_degree: 1,
+    max_filtration_radius: 1.5,
+    gnn_layers: 3,
+    persistence_threshold: 0.1,
+    homology_degree: 1,
   });
-  const [viewMode, setViewMode] = useState<"spectral" | "saliency">("spectral");
+  const [viewMode, setViewMode] = useState<ViewMode>("spectral");
   // currentEdges tracks the live edge list after any user perturbations.
   const [currentEdges, setCurrentEdges] = useState<(string | number)[][]>([]);
   const [perturbationCount, setPerturbationCount] = useState(0);
@@ -2589,7 +143,15 @@ export default function HomePage() {
   }, []);
 
   const handleDiscover = useCallback(async () => {
-    setIsLoading(true); setError(null); setResult(null); setKnotResult(null); setManifoldResult(null); setCircuitResult(null); setAlgebraicResult(null); setTDAResult(null); setWLResult(null);
+    setIsLoading(true);
+    setError(null);
+    setResult(null);
+    setKnotResult(null);
+    setManifoldResult(null);
+    setCircuitResult(null);
+    setAlgebraicResult(null);
+    setTDAResult(null);
+    setWLResult(null);
 
     // ── Topology domain (Surfaces & Manifolds) ────────────────────────────────
     if (isTopologyDomain) {
@@ -2618,7 +180,9 @@ export default function HomePage() {
         else if (err instanceof Error) msg = err.message;
         else msg = String(err);
         setError(msg);
-      } finally { setIsLoading(false); }
+      } finally {
+        setIsLoading(false);
+      }
       return;
     }
 
@@ -2640,7 +204,9 @@ export default function HomePage() {
         else if (err instanceof Error) msg = err.message;
         else msg = String(err);
         setError(msg);
-      } finally { setIsLoading(false); }
+      } finally {
+        setIsLoading(false);
+      }
       return;
     }
 
@@ -2662,7 +228,9 @@ export default function HomePage() {
         else if (err instanceof Error) msg = err.message;
         else msg = String(err);
         setError(msg);
-      } finally { setIsLoading(false); }
+      } finally {
+        setIsLoading(false);
+      }
       return;
     }
 
@@ -2683,7 +251,9 @@ export default function HomePage() {
         else if (err instanceof Error) msg = err.message;
         else msg = String(err);
         setError(msg);
-      } finally { setIsLoading(false); }
+      } finally {
+        setIsLoading(false);
+      }
       return;
     }
 
@@ -2707,7 +277,9 @@ export default function HomePage() {
         else if (err instanceof Error) msg = err.message;
         else msg = String(err);
         setError(msg);
-      } finally { setIsLoading(false); }
+      } finally {
+        setIsLoading(false);
+      }
       return;
     }
 
@@ -2731,7 +303,9 @@ export default function HomePage() {
         else if (err instanceof Error) msg = err.message;
         else msg = String(err);
         setError(msg);
-      } finally { setIsLoading(false); }
+      } finally {
+        setIsLoading(false);
+      }
       return;
     }
 
@@ -2741,15 +315,21 @@ export default function HomePage() {
       let rawData: string;
       if (inputMode === "upload") {
         if (!fileContent.trim()) throw new Error("No file loaded. Drop or select a JSON file first.");
-        inputType = "json"; rawData = fileContent;
+        inputType = "json";
+        rawData = fileContent;
       } else if (inputMode === "paste") {
         if (!pastedText.trim()) {
-          inputType = selectedDomain.defaultInputType; rawData = selectedDomain.defaultRawData;
-        } else { inputType = "edge_list"; rawData = pastedText; }
+          inputType = selectedDomain.defaultInputType;
+          rawData = selectedDomain.defaultRawData;
+        } else {
+          inputType = "edge_list";
+          rawData = pastedText;
+        }
       } else {
         const trimmed = formulaText.trim();
         if (!trimmed) throw new Error("Formula is empty. Enter a formula such as K_5, C_6, or P_4.");
-        inputType = "formula"; rawData = trimmed;
+        inputType = "formula";
+        rawData = trimmed;
       }
       const response = await processObject(inputType, rawData);
       setResult(response);
@@ -2767,12 +347,46 @@ export default function HomePage() {
         msg = String(err);
       }
       setError(msg);
-    } finally { setIsLoading(false); }
-  }, [isTopologyDomain, manifoldShape, deformation, exprX, exprY, exprZ, uMin, uMax, vMin, vMax, isKnotDomain, knotFormula, isCircuitDomain, circuitFormula, isAlgebraicDomain, algebraicFormula, isBatchDomain, batchSamples, isTDADomain, tdaShape, tdaNumPoints, tdaNoiseLevel, isWLDomain, wlFormula1, wlFormula2, selectedDomain, inputMode, pastedText, formulaText, fileContent]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    isTopologyDomain,
+    manifoldShape,
+    deformation,
+    exprX,
+    exprY,
+    exprZ,
+    uMin,
+    uMax,
+    vMin,
+    vMax,
+    isKnotDomain,
+    knotFormula,
+    isCircuitDomain,
+    circuitFormula,
+    isAlgebraicDomain,
+    algebraicFormula,
+    isTDADomain,
+    tdaShape,
+    tdaNumPoints,
+    tdaNoiseLevel,
+    isWLDomain,
+    wlFormula1,
+    wlFormula2,
+    selectedDomain,
+    inputMode,
+    pastedText,
+    formulaText,
+    fileContent,
+  ]);
 
   /** handleBatchGenerate — called by the Batch Explorer "generate" button. */
   const handleBatchGenerate = useCallback(async (n: number) => {
-    setIsLoading(true); setError(null); setBatchData(null); setConjectures(null);
+    setIsLoading(true);
+    setError(null);
+    setBatchData(null);
+    setConjectures(null);
     try {
       const response = await processBatch({ num_samples: n });
       setBatchData(response.data);
@@ -2783,13 +397,16 @@ export default function HomePage() {
       else if (err instanceof Error) msg = err.message;
       else msg = String(err);
       setError(msg);
-    } finally { setIsLoading(false); }
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   /** handleOracle — sends batch data to the SVD Conjecture Oracle. */
   const handleOracle = useCallback(async () => {
     if (!batchData || batchData.length === 0) return;
-    setIsThinking(true); setConjectures(null);
+    setIsThinking(true);
+    setConjectures(null);
     try {
       const response = await processOracle({ batch_data: batchData as unknown as Record<string, number>[] });
       setConjectures(response.conjectures);
@@ -2799,7 +416,9 @@ export default function HomePage() {
       else if (err instanceof Error) msg = err.message;
       else msg = String(err);
       setError(msg);
-    } finally { setIsThinking(false); }
+    } finally {
+      setIsThinking(false);
+    }
   }, [batchData]);
 
   /**
@@ -2813,7 +432,6 @@ export default function HomePage() {
       const src = String(source);
       const tgt = String(target);
 
-      // Filter the clicked edge out of the active edge list (undirected).
       const nextEdges = currentEdges.filter(([u, v]) => {
         const us = String(u);
         const vs = String(v);
@@ -2822,7 +440,6 @@ export default function HomePage() {
 
       if (nextEdges.length === 0) return; // refuse empty graph
 
-      // Record the deleted edge as a ghost and in the ledger.
       setDeletedEdges((prev) => [...prev, [src, tgt]]);
       setCurrentEdges(nextEdges);
       setPerturbationCount((c) => c + 1);
@@ -2831,7 +448,6 @@ export default function HomePage() {
         { id: Date.now().toString(), type: "cut", detail: `Cut (${src}, ${tgt})` },
       ]);
 
-      // Serialise remaining edges as a plain edge_list string.
       const rawData = nextEdges.map(([u, v]) => `${u} ${v}`).join("\n");
 
       setIsLoading(true);
@@ -2918,10 +534,36 @@ export default function HomePage() {
 
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         {/* Top bar */}
-        <header style={{ background: "#1C1F21", borderBottom: "1px solid #2C3133", padding: "0 24px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <header
+          style={{
+            background: "#1C1F21",
+            borderBottom: "1px solid #2C3133",
+            padding: "0 24px",
+            height: 52,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexShrink: 0,
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <span style={{ color: "#E6E4DF", fontSize: 13, fontWeight: 600, letterSpacing: "0.04em" }}>Visual Mathematical Discovery Engine</span>
-            <span style={{ background: "#2C3133", color: "#888C8E", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", padding: "2px 8px", borderRadius: 4, textTransform: "uppercase" }}>Step 2 · Data Ingestion</span>
+            <span style={{ color: "#E6E4DF", fontSize: 13, fontWeight: 600, letterSpacing: "0.04em" }}>
+              Visual Mathematical Discovery Engine
+            </span>
+            <span
+              style={{
+                background: "#2C3133",
+                color: "#888C8E",
+                fontSize: 9,
+                fontWeight: 600,
+                letterSpacing: "0.1em",
+                padding: "2px 8px",
+                borderRadius: 4,
+                textTransform: "uppercase",
+              }}
+            >
+              Step 2 · Data Ingestion
+            </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
             <span style={{ color: "#888C8E", fontSize: 11, display: "flex", alignItems: "center", gap: 6 }}>
@@ -2953,10 +595,38 @@ export default function HomePage() {
             <section style={{ flexShrink: 0, background: "#1C1F21", border: "1px solid #2C3133", borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: 280 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ color: "#888C8E", fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                  {isTopologyDomain ? "◎ Manifold Shape" : isKnotDomain ? "∞ Knot Formula" : isCircuitDomain ? "⊕ Boolean Circuit" : isAlgebraicDomain ? "∿ Implicit Polynomial" : isBatchDomain ? "⋯ Batch Configuration" : isTDADomain ? "⧖ Point Cloud & Filtration" : isWLDomain ? "⋍ Graph Twins" : "⬆ Input / Data Source"}
+                  {isTopologyDomain
+                    ? "◎ Manifold Shape"
+                    : isKnotDomain
+                    ? "∞ Knot Formula"
+                    : isCircuitDomain
+                    ? "⊕ Boolean Circuit"
+                    : isAlgebraicDomain
+                    ? "∿ Implicit Polynomial"
+                    : isBatchDomain
+                    ? "⋯ Batch Configuration"
+                    : isTDADomain
+                    ? "⧖ Point Cloud & Filtration"
+                    : isWLDomain
+                    ? "⋍ Graph Twins"
+                    : "⬆ Input / Data Source"}
                 </span>
                 <span style={{ color: "#888C8E", fontSize: 10 }}>
-                  {isTopologyDomain ? "Parametric mesh · Laplacian harmonics" : isKnotDomain ? "Torus knot parametric engine" : isCircuitDomain ? "AST parser · DAG · Critical path" : isAlgebraicDomain ? "Marching Cubes · Singularity scores" : isBatchDomain ? "Erdős-Rényi · G(N, p) random ensemble" : isTDADomain ? "Vietoris-Rips filtration · H₀ & H₁ barcodes" : isWLDomain ? "Weisfeiler-Lehman Graph Isomorphism" : "All parsing is performed server-side"}
+                  {isTopologyDomain
+                    ? "Parametric mesh · Laplacian harmonics"
+                    : isKnotDomain
+                    ? "Torus knot parametric engine"
+                    : isCircuitDomain
+                    ? "AST parser · DAG · Critical path"
+                    : isAlgebraicDomain
+                    ? "Marching Cubes · Singularity scores"
+                    : isBatchDomain
+                    ? "Erdős-Rényi · G(N, p) random ensemble"
+                    : isTDADomain
+                    ? "Vietoris-Rips filtration · H₀ & H₁ barcodes"
+                    : isWLDomain
+                    ? "Weisfeiler-Lehman Graph Isomorphism"
+                    : "All parsing is performed server-side"}
                 </span>
               </div>
               {isTopologyDomain ? (
@@ -2966,38 +636,32 @@ export default function HomePage() {
                   setManifoldShape={setManifoldShape}
                   deformation={deformation}
                   setDeformation={setDeformation}
-                  exprX={exprX} setExprX={setExprX}
-                  exprY={exprY} setExprY={setExprY}
-                  exprZ={exprZ} setExprZ={setExprZ}
-                  uMin={uMin} setUMin={setUMin}
-                  uMax={uMax} setUMax={setUMax}
-                  vMin={vMin} setVMin={setVMin}
-                  vMax={vMax} setVMax={setVMax}
+                  exprX={exprX}
+                  setExprX={setExprX}
+                  exprY={exprY}
+                  setExprY={setExprY}
+                  exprZ={exprZ}
+                  setExprZ={setExprZ}
+                  uMin={uMin}
+                  setUMin={setUMin}
+                  uMax={uMax}
+                  setUMax={setUMax}
+                  vMin={vMin}
+                  setVMin={setVMin}
+                  vMax={vMax}
+                  setVMax={setVMax}
                 />
               ) : isKnotDomain ? (
-                <KnotDropzone
-                  domain={selectedDomain}
-                  knotFormula={knotFormula}
-                  setKnotFormula={setKnotFormula}
-                />
+                <KnotDropzone domain={selectedDomain} knotFormula={knotFormula} setKnotFormula={setKnotFormula} />
               ) : isCircuitDomain ? (
-                <CircuitDropzone
-                  domain={selectedDomain}
-                  circuitFormula={circuitFormula}
-                  setCircuitFormula={setCircuitFormula}
-                />
+                <CircuitDropzone domain={selectedDomain} circuitFormula={circuitFormula} setCircuitFormula={setCircuitFormula} />
               ) : isAlgebraicDomain ? (
-                <AlgebraicDropzone
-                  domain={selectedDomain}
-                  algebraicFormula={algebraicFormula}
-                  setAlgebraicFormula={setAlgebraicFormula}
-                />
+                <AlgebraicDropzone domain={selectedDomain} algebraicFormula={algebraicFormula} setAlgebraicFormula={setAlgebraicFormula} />
               ) : isBatchDomain ? (
                 /* Batch Explorer configuration panel */
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <div style={{ color: "#888C8E", fontSize: 11, lineHeight: 1.7 }}>
-                    Generates a random ensemble of Erdős-Rényi graphs G(N,&nbsp;p) with
-                    N&nbsp;∈&nbsp;[5,&nbsp;30] and p&nbsp;∈&nbsp;[0.05,&nbsp;0.95],
+                    Generates a random ensemble of Erdős-Rényi graphs G(N,&nbsp;p) with N&nbsp;∈&nbsp;[5,&nbsp;30] and p&nbsp;∈&nbsp;[0.05,&nbsp;0.95],
                     then computes their topological invariants for scatter analysis.
                   </div>
                   {/* Sample count selector */}
@@ -3007,28 +671,40 @@ export default function HomePage() {
                       <span style={{ color: selectedDomain.color, fontFamily: "'Courier New', monospace", fontSize: 14, fontWeight: 700 }}>{batchSamples}</span>
                     </div>
                     <input
-                      type="range" min={20} max={500} step={10}
+                      type="range"
+                      min={20}
+                      max={500}
+                      step={10}
                       value={batchSamples}
                       onChange={(e) => setBatchSamples(Number(e.target.value))}
                       style={{ width: "100%", accentColor: selectedDomain.color }}
                     />
                     <div style={{ display: "flex", justifyContent: "space-between", color: "#3A3F42", fontSize: 9 }}>
-                      <span>20</span><span>500</span>
+                      <span>20</span>
+                      <span>500</span>
                     </div>
                   </div>
                   {/* Quick presets */}
                   <div style={{ display: "flex", gap: 8 }}>
                     {[50, 100, 200, 500].map((n) => (
-                      <button key={n} onClick={() => setBatchSamples(n)}
+                      <button
+                        key={n}
+                        onClick={() => setBatchSamples(n)}
                         style={{
-                          flex: 1, background: batchSamples === n ? `${selectedDomain.color}30` : "#111315",
+                          flex: 1,
+                          background: batchSamples === n ? `${selectedDomain.color}30` : "#111315",
                           border: `1px solid ${batchSamples === n ? selectedDomain.color : "#2C3133"}`,
-                          borderRadius: 7, padding: "6px 0",
+                          borderRadius: 7,
+                          padding: "6px 0",
                           color: batchSamples === n ? selectedDomain.color : "#888C8E",
-                          cursor: "pointer", fontSize: 11, fontWeight: 600,
+                          cursor: "pointer",
+                          fontSize: 11,
+                          fontWeight: 600,
                           transition: "all 0.15s ease",
                         }}
-                      >{n}</button>
+                      >
+                        {n}
+                      </button>
                     ))}
                   </div>
                   {/* Invariant legend */}
@@ -3058,17 +734,23 @@ export default function HomePage() {
               ) : isWLDomain ? (
                 <WLDropzone
                   domain={selectedDomain}
-                  formula1={wlFormula1} setFormula1={setWLFormula1}
-                  formula2={wlFormula2} setFormula2={setWLFormula2}
+                  formula1={wlFormula1}
+                  setFormula1={setWLFormula1}
+                  formula2={wlFormula2}
+                  setFormula2={setWLFormula2}
                 />
               ) : (
                 <Dropzone
                   domain={selectedDomain}
-                  inputMode={inputMode} setInputMode={setInputMode}
-                  pastedText={pastedText} setPastedText={setPastedText}
-                  formulaText={formulaText} setFormulaText={setFormulaText}
+                  inputMode={inputMode}
+                  setInputMode={setInputMode}
+                  pastedText={pastedText}
+                  setPastedText={setPastedText}
+                  formulaText={formulaText}
+                  setFormulaText={setFormulaText}
                   onFileLoad={handleFileLoad}
-                  isDragging={isDragging} setIsDragging={setIsDragging}
+                  isDragging={isDragging}
+                  setIsDragging={setIsDragging}
                 />
               )}
             </section>
@@ -3081,22 +763,88 @@ export default function HomePage() {
                 disabled={isLoading || (isTDADomain && !!tdaResult)}
                 style={{
                   flex: 1,
-                  background: isLoading || (isTDADomain && !!tdaResult) ? "#2C3133" : `linear-gradient(135deg, ${selectedDomain.color}, ${selectedDomain.color}cc)`,
-                  border: "none", borderRadius: 10,
+                  background:
+                    isLoading || (isTDADomain && !!tdaResult)
+                      ? "#2C3133"
+                      : `linear-gradient(135deg, ${selectedDomain.color}, ${selectedDomain.color}cc)`,
+                  border: "none",
+                  borderRadius: 10,
                   color: isLoading || (isTDADomain && !!tdaResult) ? "#888C8E" : "#E6E4DF",
                   cursor: isLoading || (isTDADomain && !!tdaResult) ? "not-allowed" : "pointer",
-                  fontSize: 14, fontWeight: 600, letterSpacing: "0.06em",
-                  padding: "16px 24px", transition: "all 0.2s ease",
-                  display: isTDADomain ? "none" : "flex", alignItems: "center", justifyContent: "center",
-                  gap: 10, textTransform: "uppercase",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  letterSpacing: "0.06em",
+                  padding: "16px 24px",
+                  transition: "all 0.2s ease",
+                  display: isTDADomain ? "none" : "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 10,
+                  textTransform: "uppercase",
                 }}
-                onMouseEnter={(e) => { if (!isLoading && !(isTDADomain && !!tdaResult)) (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)"; }}
-                onMouseLeave={(e) => { if (!(isTDADomain && !!tdaResult)) (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
+                onMouseEnter={(e) => {
+                  if (!isLoading && !(isTDADomain && !!tdaResult))
+                    (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
+                }}
+                onMouseLeave={(e) => {
+                  if (!(isTDADomain && !!tdaResult))
+                    (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                }}
               >
                 {isLoading ? (
-                  <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> {isTopologyDomain ? "Generating Mesh…" : isKnotDomain ? "Generating Knot…" : isCircuitDomain ? "Parsing Circuit…" : isAlgebraicDomain ? "Tracing Variety…" : isBatchDomain ? `Sampling ${batchSamples} Graphs…` : isTDADomain ? "Computing Homology…" : isWLDomain ? "Testing Twins…" : "Computing Invariants…"}</>
+                  <>
+                    <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span>{" "}
+                    {isTopologyDomain
+                      ? "Generating Mesh…"
+                      : isKnotDomain
+                      ? "Generating Knot…"
+                      : isCircuitDomain
+                      ? "Parsing Circuit…"
+                      : isAlgebraicDomain
+                      ? "Tracing Variety…"
+                      : isBatchDomain
+                      ? `Sampling ${batchSamples} Graphs…`
+                      : isTDADomain
+                      ? "Computing Homology…"
+                      : isWLDomain
+                      ? "Testing Twins…"
+                      : "Computing Invariants…"}
+                  </>
                 ) : (
-                  <><span>{isTopologyDomain ? "◎" : isKnotDomain ? "∞" : isCircuitDomain ? "⊕" : isAlgebraicDomain ? "∿" : isBatchDomain ? "⋯" : isTDADomain ? "⧖" : isWLDomain ? "⋍" : "⚗"}</span> {isTopologyDomain ? "Generate Manifold" : isKnotDomain ? "Generate Knot" : isCircuitDomain ? "Analyse Circuit" : isAlgebraicDomain ? "Extract Variety" : isBatchDomain ? `Generate ${batchSamples} Random Graphs` : isTDADomain ? "Compute Homology" : isWLDomain ? "Run Twin Test" : "Discover Structure"}</>
+                  <>
+                    <span>
+                      {isTopologyDomain
+                        ? "◎"
+                        : isKnotDomain
+                        ? "∞"
+                        : isCircuitDomain
+                        ? "⊕"
+                        : isAlgebraicDomain
+                        ? "∿"
+                        : isBatchDomain
+                        ? "⋯"
+                        : isTDADomain
+                        ? "⧖"
+                        : isWLDomain
+                        ? "⋍"
+                        : "⚗"}
+                    </span>{" "}
+                    {isTopologyDomain
+                      ? "Generate Manifold"
+                      : isKnotDomain
+                      ? "Generate Knot"
+                      : isCircuitDomain
+                      ? "Analyse Circuit"
+                      : isAlgebraicDomain
+                      ? "Extract Variety"
+                      : isBatchDomain
+                      ? `Generate ${batchSamples} Random Graphs`
+                      : isTDADomain
+                      ? "Compute Homology"
+                      : isWLDomain
+                      ? "Run Twin Test"
+                      : "Discover Structure"}
+                  </>
                 )}
               </button>
 
@@ -3106,22 +854,42 @@ export default function HomePage() {
                   onClick={handleOracle}
                   disabled={!batchData || isThinking}
                   style={{
-                    background: !batchData || isThinking ? "#1C1F21" : "linear-gradient(135deg, #D19E4A22, #D19E4A11)",
+                    background:
+                      !batchData || isThinking
+                        ? "#1C1F21"
+                        : "linear-gradient(135deg, #D19E4A22, #D19E4A11)",
                     border: `1px solid ${!batchData || isThinking ? "#2C3133" : "#D19E4A"}`,
-                    borderRadius: 10, padding: "16px 22px",
+                    borderRadius: 10,
+                    padding: "16px 22px",
                     color: !batchData || isThinking ? "#555A5D" : "#D19E4A",
                     cursor: !batchData || isThinking ? "not-allowed" : "pointer",
-                    fontSize: 13, fontWeight: 600, letterSpacing: "0.05em",
-                    display: "flex", alignItems: "center", gap: 8,
-                    whiteSpace: "nowrap", flexShrink: 0,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    letterSpacing: "0.05em",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
                     transition: "all 0.25s ease",
                     boxShadow: batchData && !isThinking ? "0 0 18px #D19E4A22" : "none",
                   }}
-                  onMouseEnter={(e) => { if (batchData && !isThinking) { (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 0 32px #D19E4A44"; (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)"; } }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.boxShadow = batchData && !isThinking ? "0 0 18px #D19E4A22" : "none"; (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)"; }}
+                  onMouseEnter={(e) => {
+                    if (batchData && !isThinking) {
+                      (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 0 32px #D19E4A44";
+                      (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                      batchData && !isThinking ? "0 0 18px #D19E4A22" : "none";
+                    (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                  }}
                 >
                   {isThinking ? (
-                    <><span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> Divining Laws…</>
+                    <>
+                      <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span> Divining Laws…
+                    </>
                   ) : (
                     <>🔮 Generate Conjecture</>
                   )}
@@ -3131,12 +899,50 @@ export default function HomePage() {
 
             {/* Structure Microscope */}
             <section style={{ flexShrink: 0, minHeight: 400 }}>
-              <Microscope result={result} knotResult={knotResult} manifoldResult={manifoldResult} circuitResult={circuitResult} algebraicResult={algebraicResult} batchData={batchData} tdaResult={tdaResult} wlResult={wlResult} wlStep={wlStep} setWlStep={setWlStep} conjectures={conjectures} domain={selectedDomain} error={error} viewMode={viewMode} setViewMode={setViewMode} onEdgeRemove={isKnotDomain || isTopologyDomain || isCircuitDomain || isAlgebraicDomain || isBatchDomain || isTDADomain || isWLDomain ? undefined : handleEdgeRemove} onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined} perturbationCount={perturbationCount} deletedEdges={deletedEdges} />
+              <Microscope
+                result={result}
+                knotResult={knotResult}
+                manifoldResult={manifoldResult}
+                circuitResult={circuitResult}
+                algebraicResult={algebraicResult}
+                batchData={batchData}
+                tdaResult={tdaResult}
+                wlResult={wlResult}
+                wlStep={wlStep}
+                setWlStep={setWlStep}
+                conjectures={conjectures}
+                domain={selectedDomain}
+                error={error}
+                viewMode={viewMode}
+                setViewMode={setViewMode}
+                onEdgeRemove={
+                  isKnotDomain ||
+                  isTopologyDomain ||
+                  isCircuitDomain ||
+                  isAlgebraicDomain ||
+                  isBatchDomain ||
+                  isTDADomain ||
+                  isWLDomain
+                    ? undefined
+                    : handleEdgeRemove
+                }
+                onNodeRemove={isTopologyDomain ? handleManifoldNodeRemove : undefined}
+                perturbationCount={perturbationCount}
+                deletedEdges={deletedEdges}
+              />
             </section>
           </main>
 
           {/* Right panel */}
-          <RightPanel domain={selectedDomain} params={params} setParams={setParams} isOpen={paramsOpen} setIsOpen={setParamsOpen} history={history} currentEdges={currentEdges} />
+          <RightPanel
+            domain={selectedDomain}
+            params={params}
+            setParams={setParams}
+            isOpen={paramsOpen}
+            setIsOpen={setParamsOpen}
+            history={history}
+            currentEdges={currentEdges}
+          />
         </div>
       </div>
     </>
