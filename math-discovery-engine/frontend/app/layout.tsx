@@ -34,8 +34,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-sans", inter.variable)} style={{ height: "100%" }}>
-      <body style={{ height: "100%", margin: 0, background: "#141617" }}>
+    <html lang="en" className={cn("font-sans", inter.variable)} suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>
