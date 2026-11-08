@@ -83,6 +83,21 @@ export interface TopologyMetadata {
   heat_kernel_signatures?: Record<string, Record<string, number>>;
   h1_generators?: (number | string)[][];
   triangles?: (number | string)[][];
+  graph_family?: {
+    family_name?: string;
+    is_tree?: boolean;
+    is_forest?: boolean;
+    is_bipartite?: boolean;
+    is_eulerian?: boolean;
+    is_regular?: boolean;
+    regular_degree?: number | null;
+    is_chordal?: boolean | null;
+    girth?: number | null;
+    diameter?: number | null;
+    radius?: number | null;
+    clustering_coefficient?: number;
+    transitivity?: number;
+  };
 }
 
 /** Response from POST /api/process-object */
@@ -735,9 +750,71 @@ export interface OracleRequest {
 }
 
 /** Response from POST /api/process-oracle */
+export interface BatchAnomaly {
+  id: number;
+  vertices: number;
+  edges: number;
+  density: number;
+  betti_0: number;
+  algebraic_connectivity: number;
+  anomaly_score: number;
+  reason: string;
+}
+
 export interface OracleResponse {
-  /** List of discovered linear relationship strings, e.g. "1.0000 V - 1.0000 E - 1.0000 β₀ = 0". */
+  /** Discovered linear and polynomial law strings. */
   conjectures: string[];
+  linear_conjectures?: string[];
+  polynomial_conjectures?: string[];
+  anomalies?: BatchAnomaly[];
+}
+
+// ---------------------------------------------------------------------------
+// Mathematical Narrator ("Professor's Notes")
+// ---------------------------------------------------------------------------
+
+export interface NarratorRequest {
+  domain: string;
+  invariants: Record<string, unknown>;
+  formula?: string;
+}
+
+export interface NarratorResponse {
+  summary: string;
+  key_insights: string[];
+  theoretical_connections: string[];
+  open_questions: string[];
+}
+
+export async function processNarrator(request: NarratorRequest): Promise<NarratorResponse> {
+  return apiFetch<NarratorResponse>("/api/narrate", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// GNN Playground (GCN, GAT, GraphSAGE)
+// ---------------------------------------------------------------------------
+
+export interface GNNInspectRequest {
+  nodes: (number | string)[];
+  edges: (number | string)[][];
+  model_type: "GCN" | "GAT" | "GraphSAGE";
+}
+
+export interface GNNInspectResponse {
+  model_type: string;
+  saliency_scores: Record<string, number>;
+  attention_weights: { source: number | string; target: number | string; weight: number }[];
+  embeddings_2d: Record<string, [number, number]>;
+}
+
+export async function processGNNInspect(request: GNNInspectRequest): Promise<GNNInspectResponse> {
+  return apiFetch<GNNInspectResponse>("/api/gnn-inspect", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
 }
 
 /**

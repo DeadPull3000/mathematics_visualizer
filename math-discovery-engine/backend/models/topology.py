@@ -122,6 +122,10 @@ class TopologyMetadata(BaseModel):
         default_factory=list,
         description="2-simplices (triangles) forming the 2-skeleton of the clique complex.",
     )
+    graph_family: dict[str, Union[bool, int, float, str, None]] = Field(
+        default_factory=dict,
+        description="Classification of graph family properties (is_tree, is_bipartite, is_eulerian, girth, etc.).",
+    )
 
 
 class MathResponse(BaseModel):

@@ -1,5 +1,7 @@
 "use client";
 
+import { ProfessorNotes } from "@/components/ProfessorNotes";
+
 import React from "react";
 import { Domain } from "@/types/domain";
 import { AlgebraicResponse } from "@/lib/api";
@@ -588,6 +590,9 @@ export function AlgebraicResultView({
           </div>
         </div>
       )}
+
+      {/* Professor's Notes */}
+      <ProfessorNotes domain="algebraic" invariants={algebraicResult as unknown as Record<string, unknown>} />
     </div>
   );
 }

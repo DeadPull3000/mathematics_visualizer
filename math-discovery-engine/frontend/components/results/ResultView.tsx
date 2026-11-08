@@ -5,6 +5,8 @@ import { Domain } from "@/types/domain";
 import { MathResponse } from "@/lib/api";
 import GraphVisualizer, { ViewMode } from "@/components/GraphVisualizer";
 import { generateLaTeXTable } from "@/lib/exportUtils";
+import { ProfessorNotes } from "@/components/ProfessorNotes";
+import { GNNPlayground } from "@/components/GNNPlayground";
 
 export interface ResultViewProps {
   result: MathResponse;
@@ -111,6 +113,64 @@ export function ResultView({
           </div>
         ))}
       </div>
+
+      {/* Graph Family & Metric Classification Strip */}
+      {result.topology?.graph_family && (
+        <div
+          style={{
+            background: "#16191B",
+            border: "1px solid #2C3133",
+            borderRadius: 10,
+            padding: "12px 18px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          <div>
+            <span style={{ color: "#888C8E", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              Graph Family:{" "}
+            </span>
+            <span style={{ color: "#D19E4A", fontWeight: 700, fontSize: 13, fontFamily: "'Georgia', serif" }}>
+              {result.topology.graph_family.family_name ?? "General Graph"}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            {result.topology.graph_family.is_tree && (
+              <span style={{ background: "#6B807530", color: "#6B8075", border: "1px solid #6B8075", borderRadius: 4, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>
+                TREE
+              </span>
+            )}
+            {result.topology.graph_family.is_bipartite && (
+              <span style={{ background: "#D19E4A30", color: "#D19E4A", border: "1px solid #D19E4A", borderRadius: 4, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>
+                BIPARTITE
+              </span>
+            )}
+            {result.topology.graph_family.is_eulerian && (
+              <span style={{ background: "#C0564030", color: "#C05640", border: "1px solid #C05640", borderRadius: 4, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>
+                EULERIAN
+              </span>
+            )}
+            {result.topology.graph_family.girth !== null && result.topology.graph_family.girth !== undefined && (
+              <span style={{ background: "#2C3133", color: "#E6E4DF", borderRadius: 4, padding: "2px 8px", fontSize: 10, fontFamily: "'Courier New', monospace" }}>
+                Girth: {result.topology.graph_family.girth}
+              </span>
+            )}
+            {result.topology.graph_family.diameter !== null && result.topology.graph_family.diameter !== undefined && (
+              <span style={{ background: "#2C3133", color: "#E6E4DF", borderRadius: 4, padding: "2px 8px", fontSize: 10, fontFamily: "'Courier New', monospace" }}>
+                Diam: {result.topology.graph_family.diameter}
+              </span>
+            )}
+            {result.topology.graph_family.clustering_coefficient !== undefined && (
+              <span style={{ background: "#2C3133", color: "#E6E4DF", borderRadius: 4, padding: "2px 8px", fontSize: 10, fontFamily: "'Courier New', monospace" }}>
+                Clustering: {result.topology.graph_family.clustering_coefficient}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Density bar */}
       <div
@@ -764,6 +824,20 @@ export function ResultView({
           )}
         </div>
       )}
+
+      {/* ── GNN Message Passing & Architecture Playground ── */}
+      <GNNPlayground
+        nodes={result.nodes}
+        edges={result.edges}
+        onSaliencyUpdate={(newSaliency) => {
+          if (result.topology) {
+            result.topology.saliency_scores = newSaliency;
+          }
+        }}
+      />
+
+      {/* ── Professor's Notes (Academic Commentary) ── */}
+      <ProfessorNotes domain={domain.id} invariants={result as unknown as Record<string, unknown>} />
     </div>
   );
 }

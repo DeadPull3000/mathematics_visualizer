@@ -11,6 +11,7 @@ import {
   processTDA,
   processWL,
   processOracle,
+  OracleResponse,
   ApiError,
   type InputType,
   type MathResponse,
@@ -86,6 +87,7 @@ export default function HomePage() {
   const [batchSamples, setBatchSamples] = useState(100);
   // Oracle: discovered conjectures from SVD null-space analysis.
   const [conjectures, setConjectures] = useState<string[] | null>(null);
+  const [oracleResult, setOracleResult] = useState<OracleResponse | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   // tdaResult: results from the Topological Data Analysis (Persistent Homology) engine.
   const [tdaResult, setTDAResult] = useState<TDAResponse | null>(null);
@@ -387,6 +389,7 @@ export default function HomePage() {
     setError(null);
     setBatchData(null);
     setConjectures(null);
+    setOracleResult(null);
     try {
       const response = await processBatch({ num_samples: n });
       setBatchData(response.data);
@@ -407,6 +410,7 @@ export default function HomePage() {
     if (!batchData || batchData.length === 0) return;
     setIsThinking(true);
     setConjectures(null);
+    setOracleResult(null);
     try {
       const response = await processOracle({ batch_data: batchData as unknown as Record<string, number>[] });
       setConjectures(response.conjectures);
@@ -911,6 +915,7 @@ export default function HomePage() {
                 wlStep={wlStep}
                 setWlStep={setWlStep}
                 conjectures={conjectures}
+                oracleResult={oracleResult}
                 domain={selectedDomain}
                 error={error}
                 viewMode={viewMode}

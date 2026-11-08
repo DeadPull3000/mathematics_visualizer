@@ -6,7 +6,7 @@ import logging
 from fastapi import APIRouter, HTTPException, status
 
 from models.oracle import OracleRequest, OracleResponse
-from services.oracle import discover_linear_laws
+from services.oracle import discover_all_laws
 
 log = logging.getLogger("math-engine.routes.oracle")
 router = APIRouter(tags=["Conjecture Oracle"])
@@ -15,14 +15,19 @@ router = APIRouter(tags=["Conjecture Oracle"])
 @router.post(
     "/api/process-oracle",
     response_model=OracleResponse,
-    summary="Discover linear relationships using SVD",
+    summary="Discover linear and non-linear relationships using SVD Null-Space",
     status_code=status.HTTP_200_OK,
 )
 async def process_oracle(payload: OracleRequest) -> OracleResponse:
-    """Discovers null space linear relationships among graph topological invariants."""
+    """Discovers null space linear and polynomial relationships and flags batch anomalies."""
     try:
-        conjectures = discover_linear_laws(payload.batch_data)
-        return OracleResponse(conjectures=conjectures)
+        discovery = discover_all_laws(payload.batch_data)
+        return OracleResponse(
+            conjectures=discovery["conjectures"],
+            linear_conjectures=discovery["linear_conjectures"],
+            polynomial_conjectures=discovery["polynomial_conjectures"],
+            anomalies=discovery["anomalies"],
+        )
     except Exception as exc:
         log.exception("Oracle computation failed: %s", exc)
         raise HTTPException(

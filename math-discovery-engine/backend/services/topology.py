@@ -16,6 +16,7 @@ import scipy.linalg
 from models.topology import GraphMetadata, TopologyMetadata
 from ml_engine import compute_gradient_saliency
 from topology import compute_spectral_topology, compute_simplicial_homology
+from .classifier import classify_graph
 
 log = logging.getLogger("math-engine.services.topology")
 
@@ -59,6 +60,7 @@ def compute_full_topology(graph: nx.Graph) -> TopologyMetadata:
     spec = compute_spectral_topology(graph)
     homology = compute_simplicial_homology(graph)
     saliency = compute_gradient_saliency(graph)
+    family_classification = classify_graph(graph)
 
     return TopologyMetadata(
         laplacian_eigenvalues=spec["laplacian_eigenvalues"],
@@ -72,6 +74,7 @@ def compute_full_topology(graph: nx.Graph) -> TopologyMetadata:
         heat_kernel_signatures=spec["heat_kernel_signatures"],
         h1_generators=homology["h1_generators"],
         triangles=homology["triangles"],
+        graph_family=family_classification,
     )
 
 

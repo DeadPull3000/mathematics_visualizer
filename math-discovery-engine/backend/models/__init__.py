@@ -19,6 +19,8 @@ from .batch import BatchRequest, BatchResponse
 from .tda import TDARequest, TDAResponse
 from .wl import WLRequest, WLResponse
 from .oracle import OracleRequest, OracleResponse
+from .narrator import NarratorRequest, NarratorResponse
+from .gnn import GNNInspectRequest, GNNInspectResponse
 
 __all__ = [
     "InputType",
@@ -42,4 +44,8 @@ __all__ = [
     "WLResponse",
     "OracleRequest",
     "OracleResponse",
+    "NarratorRequest",
+    "NarratorResponse",
+    "GNNInspectRequest",
+    "GNNInspectResponse",
 ]

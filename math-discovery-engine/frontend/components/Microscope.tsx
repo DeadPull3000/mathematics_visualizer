@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Domain } from "@/types/domain";
+import { OracleResponse } from "@/lib/api";
 import {
   MathResponse,
   KnotResponse,
@@ -37,6 +38,7 @@ export interface MicroscopeProps {
   wlStep: number;
   setWlStep: (s: number) => void;
   conjectures: string[] | null;
+  oracleResult?: OracleResponse | null;
   domain: Domain;
   error: string | null;
   viewMode: ViewMode;
@@ -59,6 +61,7 @@ export function Microscope({
   wlStep,
   setWlStep,
   conjectures,
+  oracleResult,
   domain,
   error,
   viewMode,
@@ -372,15 +375,18 @@ export function Microscope({
         ) : isBatchDomain ? (
           batchData ? (
             <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
-              {/* Conjectures card — rendered when Oracle has run */}
-              {conjectures && conjectures.length > 0 && (
+              {/* Conjectures & Anomaly Oracle card */}
+              {((conjectures && conjectures.length > 0) || (oracleResult && (oracleResult.conjectures.length > 0 || (oracleResult.anomalies && oracleResult.anomalies.length > 0)))) && (
                 <div
                   style={{
-                    background: "linear-gradient(135deg, #D19E4A08, #D19E4A04)",
-                    border: "1px solid #D19E4A55",
+                    background: "linear-gradient(135deg, #1C1F21, #141617)",
+                    border: "1px solid #D19E4A66",
                     borderRadius: 12,
                     padding: "20px 24px",
-                    boxShadow: "0 0 40px #D19E4A18, inset 0 1px 0 #D19E4A22",
+                    boxShadow: "0 0 40px #D19E4A15, inset 0 1px 0 #D19E4A22",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 16,
                   }}
                 >
                   <div
@@ -388,64 +394,80 @@ export function Microscope({
                       display: "flex",
                       alignItems: "center",
                       gap: 10,
-                      marginBottom: 16,
+                      borderBottom: "1px solid #2C3133",
+                      paddingBottom: 12,
                     }}
                   >
                     <span style={{ fontSize: 18 }}>🔮</span>
+                    <div>
+                      <div
+                        style={{
+                          color: "#D19E4A",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          letterSpacing: "0.14em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Conjecture Oracle & Anomaly Detector
+                      </div>
+                      <div style={{ color: "#888C8E", fontSize: 10, marginTop: 2 }}>
+                        Automated SVD Null-Space Theorem Extraction & Isolation Forest Outlier Analysis
+                      </div>
+                    </div>
+                    <div style={{ flex: 1 }} />
                     <span
                       style={{
+                        background: "#D19E4A20",
                         color: "#D19E4A",
-                        fontSize: 11,
+                        border: "1px solid #D19E4A40",
+                        borderRadius: 4,
+                        padding: "2px 8px",
+                        fontSize: 9,
+                        fontFamily: "'Courier New', monospace",
                         fontWeight: 700,
-                        letterSpacing: "0.14em",
-                        textTransform: "uppercase",
                       }}
                     >
-                      Discovered Theorems
-                    </span>
-                    <div
-                      style={{
-                        flex: 1,
-                        height: 1,
-                        background: "linear-gradient(to right, #D19E4A44, transparent)",
-                      }}
-                    />
-                    <span style={{ color: "#D19E4A66", fontSize: 9, letterSpacing: "0.08em" }}>
-                      SVD · Null Space Analysis
+                      Confidence: 100% (SVD Null Space)
                     </span>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    {conjectures.map((c, i) => (
+
+                  {/* Linear & Polynomial Theorems */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ color: "#6B8075", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      Discovered Algebraic Invariant Laws
+                    </div>
+                    {(oracleResult?.conjectures ?? conjectures ?? []).map((c, i) => (
                       <div
                         key={i}
                         style={{
-                          background: "#D19E4A0A",
-                          border: "1px solid #D19E4A33",
+                          background: "#0F1113",
+                          border: "1px solid #2C3133",
                           borderRadius: 8,
-                          padding: "14px 18px",
+                          padding: "12px 16px",
                           display: "flex",
                           alignItems: "center",
-                          gap: 16,
+                          gap: 14,
                         }}
                       >
                         <span
                           style={{
-                            color: "#D19E4A55",
+                            color: "#D19E4A",
                             fontSize: 10,
                             fontWeight: 700,
                             fontFamily: "'Courier New', monospace",
                             flexShrink: 0,
                           }}
                         >
-                          Thm {(i + 1).toString().padStart(2, "0")}
+                          Law {(i + 1).toString().padStart(2, "0")}
                         </span>
                         <span
                           style={{
                             color: "#E6E4DF",
                             fontFamily: "'Courier New', monospace",
-                            fontSize: 15,
+                            fontSize: 14,
                             fontWeight: 600,
-                            letterSpacing: "0.04em",
+                            letterSpacing: "0.03em",
                             wordBreak: "break-all",
                           }}
                         >
@@ -454,16 +476,56 @@ export function Microscope({
                       </div>
                     ))}
                   </div>
+
+                  {/* Isolation Forest Anomalies */}
+                  {oracleResult?.anomalies && oracleResult.anomalies.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+                      <div style={{ color: "#C05640", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        Detected Structural Anomalies (Isolation Forest Outliers)
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        {oracleResult.anomalies.map((anom) => (
+                          <div
+                            key={anom.id}
+                            style={{
+                              background: "#16191B",
+                              border: "1px solid #C0564050",
+                              borderRadius: 6,
+                              padding: "10px 12px",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 4,
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ color: "#E6E4DF", fontWeight: 700, fontSize: 11 }}>
+                                Graph #{anom.id}
+                              </span>
+                              <span style={{ color: "#C05640", fontSize: 10, fontFamily: "'Courier New', monospace" }}>
+                                Score: {anom.anomaly_score.toFixed(3)}
+                              </span>
+                            </div>
+                            <div style={{ color: "#D19E4A", fontSize: 10, fontStyle: "italic" }}>
+                              {anom.reason}
+                            </div>
+                            <div style={{ color: "#888C8E", fontSize: 9, fontFamily: "'Courier New', monospace" }}>
+                              |V|={anom.vertices} · |E|={anom.edges} · ρ={anom.density.toFixed(2)} · β₀={anom.betti_0}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div
                     style={{
-                      marginTop: 14,
-                      color: "#888C8E55",
+                      color: "#888C8E",
                       fontSize: 9,
                       letterSpacing: "0.06em",
                       textAlign: "right",
                     }}
                   >
-                    Derived from {batchData.length} graph samples via Singular Value Decomposition
+                    Resolved across {batchData.length} sampled graphs via SVD Null Space & Isolation Forest
                   </div>
                 </div>
               )}

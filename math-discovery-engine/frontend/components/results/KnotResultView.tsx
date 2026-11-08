@@ -1,5 +1,7 @@
 "use client";
 
+import { ProfessorNotes } from "@/components/ProfessorNotes";
+
 import React from "react";
 import { Domain } from "@/types/domain";
 import { KnotResponse } from "@/lib/api";
@@ -365,6 +367,9 @@ export function KnotResultView({
           </div>
         </div>
       )}
+
+      {/* Professor's Notes */}
+      <ProfessorNotes domain="knot" invariants={knotResult as unknown as Record<string, unknown>} />
     </div>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { ProfessorNotes } from "@/components/ProfessorNotes";
+
 import React from "react";
 import { Domain } from "@/types/domain";
 import { ManifoldResponse } from "@/lib/api";
@@ -362,6 +364,9 @@ export function ManifoldResultView({
           </div>
         </div>
       )}
+
+      {/* Professor's Notes */}
+      <ProfessorNotes domain="manifold" invariants={manifoldResult as unknown as Record<string, unknown>} />
     </div>
   );
 }

@@ -16,6 +16,8 @@ from .batch import router as batch_router
 from .tda import router as tda_router
 from .wl import router as wl_router
 from .oracle import router as oracle_router
+from .narrator import router as narrator_router
+from .gnn import router as gnn_router
 
 api_router = APIRouter()
 
@@ -32,5 +34,7 @@ api_router.include_router(batch_router)
 api_router.include_router(tda_router)
 api_router.include_router(wl_router)
 api_router.include_router(oracle_router)
+api_router.include_router(narrator_router)
+api_router.include_router(gnn_router)
 
 __all__ = ["api_router"]
