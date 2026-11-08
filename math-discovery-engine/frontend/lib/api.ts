@@ -918,3 +918,84 @@ export async function getCacheStats(): Promise<CacheStats> {
 export async function clearCache(): Promise<{ status: string }> {
   return apiFetch<{ status: string }>("/api/cache/clear", { method: "POST" });
 }
+
+
+// ---------------------------------------------------------------------------
+// Session Persistence & Domain Registry (Phase 5)
+// ---------------------------------------------------------------------------
+
+export interface DomainManifest {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  color: string;
+  icon: string;
+  endpoint: string;
+  is_active: boolean;
+}
+
+export async function listDomainManifests(): Promise<DomainManifest[]> {
+  return apiFetch<DomainManifest[]>("/api/domains");
+}
+
+export interface SessionItem {
+  id: string;
+  title: string;
+  created_at: number;
+  updated_at: number;
+  exploration_count: number;
+}
+
+export interface ExplorationItem {
+  id: string;
+  session_id: string;
+  domain: string;
+  input_type: string;
+  raw_data: string;
+  result: Record<string, unknown>;
+  created_at: number;
+}
+
+export interface SessionDetail extends SessionItem {
+  explorations: ExplorationItem[];
+}
+
+export async function listSessions(): Promise<SessionItem[]> {
+  return apiFetch<SessionItem[]>("/api/sessions");
+}
+
+export async function createSession(title: string = "Untitled Session"): Promise<SessionItem> {
+  return apiFetch<SessionItem>("/api/sessions", {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
+}
+
+export async function getSession(sessionId: string): Promise<SessionDetail> {
+  return apiFetch<SessionDetail>(`/api/sessions/${sessionId}`);
+}
+
+export async function saveExploration(
+  sessionId: string,
+  domain: string,
+  inputType: string,
+  rawData: string,
+  resultData: unknown
+): Promise<ExplorationItem> {
+  return apiFetch<ExplorationItem>(`/api/sessions/${sessionId}/explorations`, {
+    method: "POST",
+    body: JSON.stringify({
+      domain,
+      input_type: inputType,
+      raw_data: rawData,
+      result_data: resultData,
+    }),
+  });
+}
+
+export async function deleteSession(sessionId: string): Promise<{ status: string; session_id: string }> {
+  return apiFetch<{ status: string; session_id: string }>(`/api/sessions/${sessionId}`, {
+    method: "DELETE",
+  });
+}

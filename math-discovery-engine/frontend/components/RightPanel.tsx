@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from "react";
 import { Download } from "lucide-react";
 import { Domain } from "@/types/domain";
-import { MathRequest, exportToPython } from "@/lib/api";
+import { MathRequest, exportToPython, listSessions, createSession, saveExploration, SessionItem } from "@/lib/api";
 
 export interface RightPanelProps {
   domain: Domain;
@@ -13,6 +13,8 @@ export interface RightPanelProps {
   setIsOpen: (v: boolean) => void;
   history: { id: string; type: "genesis" | "cut"; detail: string }[];
   currentEdges: (string | number)[][];
+  currentResult?: unknown;
+  rawInput?: string;
 }
 
 export function RightPanel({
@@ -23,8 +25,66 @@ export function RightPanel({
   setIsOpen,
   history,
   currentEdges,
+  currentResult,
+  rawInput,
 }: RightPanelProps) {
   const [isExporting, setIsExporting] = useState(false);
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string>("");
+  const [newSessionTitle, setNewSessionTitle] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Load sessions from SQLite on mount
+  React.useEffect(() => {
+    listSessions().then((res) => {
+      setSessions(res);
+      if (res.length > 0 && !activeSessionId) {
+        setActiveSessionId(res[0].id);
+      }
+    }).catch(console.error);
+  }, []);
+
+  const handleCreateSession = async () => {
+    if (!newSessionTitle.trim()) return;
+    try {
+      const created = await createSession(newSessionTitle.trim());
+      setSessions((prev) => [created, ...prev]);
+      setActiveSessionId(created.id);
+      setNewSessionTitle("");
+    } catch (err) {
+      console.error("Create session error:", err);
+    }
+  };
+
+  const handleSaveExploration = async () => {
+    if (!activeSessionId && sessions.length === 0) {
+      const created = await createSession("Laboratory Session");
+      setSessions([created]);
+      setActiveSessionId(created.id);
+    }
+    const sessId = activeSessionId || (sessions[0]?.id ?? "default");
+    setIsSaving(true);
+    try {
+      const dataToSave = currentResult || { edges: currentEdges };
+      await saveExploration(
+        sessId,
+        domain.id,
+        "edge_list",
+        rawInput || currentEdges.map(([u, v]) => `${u} ${v}`).join("\n") || "empty",
+        dataToSave
+      );
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+      // Refresh sessions to update count
+      const updated = await listSessions();
+      setSessions(updated);
+    } catch (err) {
+      console.error("Save exploration error:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleExport = useCallback(async () => {
     if (currentEdges.length === 0) return;

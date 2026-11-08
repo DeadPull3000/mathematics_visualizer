@@ -29,6 +29,7 @@ import { Domain, DOMAINS, InputMode } from "@/types/domain";
 import { Sidebar } from "@/components/Sidebar";
 import { Microscope } from "@/components/Microscope";
 import { RightPanel } from "@/components/RightPanel";
+import { CurriculumModal } from "@/components/CurriculumModal";
 import {
   Dropzone,
   AlgebraicDropzone,
@@ -92,6 +93,8 @@ export default function HomePage() {
   const [conjectures, setConjectures] = useState<string[] | null>(null);
   const [oracleResult, setOracleResult] = useState<OracleResponse | null>(null);
   const [isThinking, setIsThinking] = useState(false);
+  const [isCurriculumOpen, setIsCurriculumOpen] = useState(false);
+  const [isPresentationMode, setIsPresentationMode] = useState(false);
   // tdaResult: results from the Topological Data Analysis (Persistent Homology) engine.
   const [tdaResult, setTDAResult] = useState<TDAResponse | null>(null);
   const [tdaShape, setTdaShape] = useState<"noisy_circle" | "noisy_sphere" | "random_noise">("noisy_circle");
@@ -433,6 +436,44 @@ export default function HomePage() {
     }
   }, []);
 
+  /** handleLaunchScenario — launches guided curriculum scenario into active workspace. */
+  const handleLaunchScenario = useCallback(
+    (domainId: string, inputType: "edge_list" | "formula" | "json", rawData: string) => {
+      const dom = DOMAINS.find((d) => d.id === domainId) ?? DOMAINS[0];
+      setSelectedDomain(dom);
+      setInputMode(inputType === "formula" ? "formula" : "paste");
+      if (inputType === "formula") {
+        setFormulaText(rawData);
+        setAlgebraicFormula(rawData);
+      } else {
+        setPastedText(rawData);
+      }
+      setIsLoading(true);
+      setError(null);
+      if (dom.id === "topology") {
+        processObject(inputType, rawData)
+          .then((res) => {
+            setResult(res);
+            setCurrentEdges(res.edges);
+            setHistory([{ id: Date.now().toString(), type: "genesis", detail: `Curriculum Lab: ${rawData.substring(0, 24)}` }]);
+          })
+          .catch((err) => setError(String(err)))
+          .finally(() => setIsLoading(false));
+      } else if (dom.id === "algebraic-geometry") {
+        processAlgebraic({ formula: rawData })
+          .then((res) => {
+            setAlgebraicResult(res);
+            setHistory([{ id: Date.now().toString(), type: "genesis", detail: `Curriculum Lab: ${rawData}` }]);
+          })
+          .catch((err) => setError(String(err)))
+          .finally(() => setIsLoading(false));
+      } else {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
   /** handleOracle — sends batch data to the SVD Conjecture Oracle. */
   const handleOracle = useCallback(async () => {
     if (!batchData || batchData.length === 0) return;
@@ -597,7 +638,55 @@ export default function HomePage() {
               Step 2 · Data Ingestion
             </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {/* Guided Labs Button (Phase 5) */}
+            <button
+              id="curriculum-btn"
+              onClick={() => setIsCurriculumOpen(true)}
+              style={{
+                background: "linear-gradient(135deg, #D19E4A25, #D19E4A10)",
+                border: "1px solid #D19E4A",
+                borderRadius: 6,
+                color: "#D19E4A",
+                fontSize: 10,
+                fontWeight: 700,
+                padding: "4px 10px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                transition: "all 0.2s ease",
+              }}
+              title="Open interactive guided curriculum laboratories and scenarios"
+            >
+              <span>🎓</span>
+              <span>GUIDED LABS</span>
+            </button>
+
+            {/* Lecture / Presentation Mode Button (Phase 5) */}
+            <button
+              id="presentation-btn"
+              onClick={() => setIsPresentationMode(!isPresentationMode)}
+              style={{
+                background: isPresentationMode ? "#C05640" : "#2C313380",
+                border: `1px solid ${isPresentationMode ? "#C05640" : "#2C3133"}`,
+                borderRadius: 6,
+                color: isPresentationMode ? "#141617" : "#E6E4DF",
+                fontSize: 10,
+                fontWeight: 700,
+                padding: "4px 10px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                transition: "all 0.2s ease",
+              }}
+              title="Toggle distraction-free lecture presentation mode"
+            >
+              <span>📽️</span>
+              <span>{isPresentationMode ? "EXIT LECTURE" : "LECTURE MODE"}</span>
+            </button>
+
             <span style={{ color: "#888C8E", fontSize: 11, display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6B8075", display: "inline-block" }} />
               Backend · localhost:8000
@@ -610,10 +699,73 @@ export default function HomePage() {
 
         {/* Body */}
         <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-          <Sidebar selected={selectedDomain} onSelect={handleDomainSelect} />
+          {!isPresentationMode && <Sidebar selected={selectedDomain} onSelect={handleDomainSelect} />}
 
           {/* Central scrollable column */}
-          <main style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: 32, display: "flex", flexDirection: "column", gap: 32 }}>
+          <main style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: isPresentationMode ? 20 : 32, display: "flex", flexDirection: "column", gap: isPresentationMode ? 20 : 32 }}>
+            {/* Presentation Mode Control Bar */}
+            {isPresentationMode && (
+              <div
+                style={{
+                  background: "#16191B",
+                  border: "1px solid #C05640",
+                  borderRadius: 10,
+                  padding: "10px 18px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ color: "#C05640", fontWeight: 700, fontSize: 12, letterSpacing: "0.08em" }}>
+                    📽️ LECTURE PRESENTATION MODE:
+                  </span>
+                  <span style={{ color: selectedDomain.color, fontWeight: 700, fontSize: 13, fontFamily: "'Georgia', serif" }}>
+                    {selectedDomain.label}
+                  </span>
+                </div>
+                {/* Domain Quick Switchers */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {DOMAINS.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() => handleDomainSelect(d)}
+                      style={{
+                        background: selectedDomain.id === d.id ? d.color : "#2C313360",
+                        color: selectedDomain.id === d.id ? "#141617" : "#E6E4DF",
+                        border: "1px solid #2C3133",
+                        borderRadius: 4,
+                        padding: "3px 8px",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {d.icon} {d.id}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setIsPresentationMode(false)}
+                    style={{
+                      background: "#C05640",
+                      border: "none",
+                      borderRadius: 4,
+                      color: "#141617",
+                      padding: "3px 8px",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      marginLeft: 8,
+                    }}
+                  >
+                    ✕ EXIT
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Breadcrumb */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ color: selectedDomain.color, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>
@@ -1000,17 +1152,28 @@ export default function HomePage() {
           </main>
 
           {/* Right panel */}
-          <RightPanel
-            domain={selectedDomain}
-            params={params}
-            setParams={setParams}
-            isOpen={paramsOpen}
-            setIsOpen={setParamsOpen}
-            history={history}
-            currentEdges={currentEdges}
-          />
+          {!isPresentationMode && (
+            <RightPanel
+              domain={selectedDomain}
+              params={params}
+              setParams={setParams}
+              isOpen={paramsOpen}
+              setIsOpen={setParamsOpen}
+              history={history}
+              currentEdges={currentEdges}
+              currentResult={result || knotResult || manifoldResult || algebraicResult || circuitResult}
+              rawInput={formulaText || pastedText || algebraicFormula || circuitFormula}
+            />
+          )}
         </div>
       </div>
+
+      {/* Curriculum Modal (Phase 5) */}
+      <CurriculumModal
+        isOpen={isCurriculumOpen}
+        onClose={() => setIsCurriculumOpen(false)}
+        onLaunchScenario={handleLaunchScenario}
+      />
     </>
   );
 }

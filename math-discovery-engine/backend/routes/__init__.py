@@ -19,6 +19,8 @@ from .oracle import router as oracle_router
 from .narrator import router as narrator_router
 from .gnn import router as gnn_router
 from .cache import router as cache_router
+from .domains import router as domains_router
+from .sessions import router as sessions_router
 
 api_router = APIRouter()
 
@@ -38,5 +40,7 @@ api_router.include_router(oracle_router)
 api_router.include_router(narrator_router)
 api_router.include_router(gnn_router)
 api_router.include_router(cache_router)
+api_router.include_router(domains_router)
+api_router.include_router(sessions_router)
 
 __all__ = ["api_router"]
