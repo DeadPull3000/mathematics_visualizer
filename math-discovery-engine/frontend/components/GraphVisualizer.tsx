@@ -20,6 +20,8 @@
 
 import dynamic from "next/dynamic";
 import React, { useRef, useMemo, useCallback, useState, useEffect } from "react";
+import * as THREE from "three";
+import { exportToOBJ, exportToSTL } from "@/lib/exportUtils";
 
 // ---------------------------------------------------------------------------
 // Palette
@@ -171,6 +173,127 @@ function GraphVisualizerInner({
 
   // Which node is the cursor over? Used to reveal connected ghost edges.
   const [hoveredNode, setHoveredNode] = useState<FGNode | null>(null);
+  const [autoRotate, setAutoRotate] = useState<boolean>(false);
+  const [surfaceShading, setSurfaceShading] = useState<boolean>(true);
+
+  // Camera presets
+  const setCameraView = useCallback((preset: "top" | "front" | "side" | "iso" | "reset") => {
+    if (!fgRef.current) return;
+    const dist = 320;
+    switch (preset) {
+      case "top":
+        fgRef.current.cameraPosition({ x: 0, y: dist, z: 0 }, { x: 0, y: 0, z: 0 }, 600);
+        break;
+      case "front":
+        fgRef.current.cameraPosition({ x: 0, y: 0, z: dist }, { x: 0, y: 0, z: 0 }, 600);
+        break;
+      case "side":
+        fgRef.current.cameraPosition({ x: dist, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, 600);
+        break;
+      case "iso":
+        fgRef.current.cameraPosition({ x: dist * 0.6, y: dist * 0.6, z: dist * 0.6 }, { x: 0, y: 0, z: 0 }, 600);
+        break;
+      case "reset":
+        fgRef.current.zoomToFit(600, 30);
+        break;
+    }
+  }, []);
+
+  // Auto-rotation loop
+  useEffect(() => {
+    let animId: number;
+    if (autoRotate && fgRef.current) {
+      const step = () => {
+        const camera = fgRef.current?.camera();
+        if (camera) {
+          const x = camera.position.x;
+          const z = camera.position.z;
+          const theta = 0.007;
+          camera.position.x = x * Math.cos(theta) - z * Math.sin(theta);
+          camera.position.z = x * Math.sin(theta) + z * Math.cos(theta);
+          camera.lookAt(0, 0, 0);
+        }
+        animId = requestAnimationFrame(step);
+      };
+      animId = requestAnimationFrame(step);
+    }
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [autoRotate]);
+
+  // Mesh Shading in Three.js Scene
+  useEffect(() => {
+    if (!fgRef.current) return;
+    const scene = fgRef.current.scene();
+    if (!scene) return;
+
+    const existing = scene.getObjectByName("manifold_surface_mesh");
+    if (existing) scene.remove(existing);
+
+    if (isManifoldMode && knotNodes && faces && surfaceShading) {
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(knotNodes.length * 3);
+      const idMap = new Map<number | string, number>();
+
+      knotNodes.forEach((n, idx) => {
+        idMap.set(n.id, idx);
+        positions[idx * 3] = n.fx;
+        positions[idx * 3 + 1] = n.fy;
+        positions[idx * 3 + 2] = n.fz;
+      });
+
+      const indices: number[] = [];
+      faces.forEach((f) => {
+        const i0 = idMap.get(f[0]);
+        const i1 = idMap.get(f[1]);
+        const i2 = idMap.get(f[2]);
+        if (i0 !== undefined && i1 !== undefined && i2 !== undefined) {
+          indices.push(i0, i1, i2);
+        }
+      });
+
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x6b8075,
+        roughness: 0.35,
+        metalness: 0.2,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.65,
+      });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.name = "manifold_surface_mesh";
+      scene.add(mesh);
+    }
+
+    return () => {
+      const m = scene.getObjectByName("manifold_surface_mesh");
+      if (m) scene.remove(m);
+    };
+  }, [isManifoldMode, knotNodes, faces, surfaceShading]);
+
+  // Snapshot handler
+  const handleSnapshot = useCallback(() => {
+    if (!fgRef.current) return;
+    const renderer = fgRef.current.renderer();
+    const scene = fgRef.current.scene();
+    const camera = fgRef.current.camera();
+    if (renderer && scene && camera) {
+      renderer.render(scene, camera);
+      const dataUrl = renderer.domElement.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `mathematical_microscope_${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  }, []);
 
   // ── Build graphData (nodes + active + ghost links) ──────────────────────
   const graphData = useMemo<{ nodes: FGNode[]; links: FGLink[] }>(() => {
@@ -368,6 +491,153 @@ function GraphVisualizerInner({
         position: "relative",
       }}
     >
+      {/* ── Viewport Control Toolbar (Phase 2) ────────────────── */}
+      <div
+        style={{
+          position: "absolute",
+          top: 10,
+          right: 10,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          background: "#1C1F21cc",
+          backdropFilter: "blur(8px)",
+          border: "1px solid #2C3133",
+          borderRadius: 8,
+          padding: "4px 8px",
+          zIndex: 10,
+        }}
+      >
+        {/* Camera Presets */}
+        <div style={{ display: "flex", gap: 3, borderRight: "1px solid #2C3133", paddingRight: 6 }}>
+          {(
+            [
+              { id: "iso", label: "ISO" },
+              { id: "top", label: "TOP" },
+              { id: "front", label: "FRONT" },
+              { id: "side", label: "SIDE" },
+              { id: "reset", label: "FIT" },
+            ] as const
+          ).map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setCameraView(p.id)}
+              style={{
+                background: "#2C313380",
+                border: "1px solid #2C3133",
+                borderRadius: 4,
+                color: "#E6E4DF",
+                fontSize: 9,
+                fontWeight: 600,
+                padding: "3px 6px",
+                cursor: "pointer",
+                fontFamily: "'Courier New', monospace",
+              }}
+              title={`Align camera to ${p.label} view`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Auto-Rotation Toggle */}
+        <button
+          onClick={() => setAutoRotate(!autoRotate)}
+          style={{
+            background: autoRotate ? "#D19E4A" : "#2C313380",
+            border: "1px solid #2C3133",
+            borderRadius: 4,
+            color: autoRotate ? "#141617" : "#E6E4DF",
+            fontSize: 9,
+            fontWeight: 700,
+            padding: "3px 7px",
+            cursor: "pointer",
+            fontFamily: "'Courier New', monospace",
+          }}
+          title="Toggle continuous auto-rotation"
+        >
+          {autoRotate ? "↻ ROTATING" : "↻ ROTATE"}
+        </button>
+
+        {/* Surface Shading Toggle (if mesh) */}
+        {faces && faces.length > 0 && (
+          <button
+            onClick={() => setSurfaceShading(!surfaceShading)}
+            style={{
+              background: surfaceShading ? "#6B8075" : "#2C313380",
+              border: "1px solid #2C3133",
+              borderRadius: 4,
+              color: "#E6E4DF",
+              fontSize: 9,
+              fontWeight: 600,
+              padding: "3px 7px",
+              cursor: "pointer",
+              fontFamily: "'Courier New', monospace",
+            }}
+            title="Toggle 3D shaded surface vs pure wireframe"
+          >
+            {surfaceShading ? "◼ SHADED" : "◻ WIRE"}
+          </button>
+        )}
+
+        {/* 3D OBJ & STL Exports (if mesh) */}
+        {faces && faces.length > 0 && knotNodes && (
+          <div style={{ display: "flex", gap: 3, borderLeft: "1px solid #2C3133", paddingLeft: 6 }}>
+            <button
+              onClick={() => exportToOBJ(knotNodes, faces, `mesh_${Date.now()}.obj`)}
+              style={{
+                background: "#2C313380",
+                border: "1px solid #2C3133",
+                borderRadius: 4,
+                color: "#D19E4A",
+                fontSize: 9,
+                fontWeight: 700,
+                padding: "3px 6px",
+                cursor: "pointer",
+                fontFamily: "'Courier New', monospace",
+              }}
+              title="Export 3D Wavefront OBJ mesh"
+            >
+              OBJ
+            </button>
+            <button
+              onClick={() => exportToSTL(knotNodes, faces, `mesh_${Date.now()}.stl`)}
+              style={{
+                background: "#2C313380",
+                border: "1px solid #2C3133",
+                borderRadius: 4,
+                color: "#C05640",
+                fontSize: 9,
+                fontWeight: 700,
+                padding: "3px 6px",
+                cursor: "pointer",
+                fontFamily: "'Courier New', monospace",
+              }}
+              title="Export 3D STL file for 3D printing"
+            >
+              STL
+            </button>
+          </div>
+        )}
+
+        {/* High-Res Snapshot */}
+        <button
+          onClick={handleSnapshot}
+          style={{
+            background: "#2C313380",
+            border: "1px solid #2C3133",
+            borderRadius: 4,
+            color: "#E6E4DF",
+            fontSize: 10,
+            padding: "3px 7px",
+            cursor: "pointer",
+          }}
+          title="Save WebGL PNG Snapshot"
+        >
+          📷 PNG
+        </button>
+      </div>
+
       <ForceGraph3D
         key={`${graphData.nodes.length}-${graphData.links.length}-${viewMode}`}
         ref={fgRef}

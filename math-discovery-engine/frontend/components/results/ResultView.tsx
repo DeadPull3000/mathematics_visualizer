@@ -4,6 +4,7 @@ import React from "react";
 import { Domain } from "@/types/domain";
 import { MathResponse } from "@/lib/api";
 import GraphVisualizer, { ViewMode } from "@/components/GraphVisualizer";
+import { generateLaTeXTable } from "@/lib/exportUtils";
 
 export interface ResultViewProps {
   result: MathResponse;
@@ -29,6 +30,7 @@ export function ResultView({
     m.is_planar === null ? "Skipped (|E| > 1 000)" : m.is_planar ? "Yes ✓" : "No ✗";
   const planarColor = m.is_planar === null ? "#888C8E" : m.is_planar ? "#6B8075" : "#C05640";
 
+  const [copiedLatex, setCopiedLatex] = React.useState(false);
   const betti = result.topology?.betti_numbers ?? [];
   const beta1 = betti[1] ?? 0;
   const beta2 = betti[2] ?? 0;
@@ -167,6 +169,47 @@ export function ResultView({
           overflow: "hidden",
         }}
       >
+        <div
+          style={{
+            padding: "10px 16px",
+            borderBottom: "1px solid #2C3133",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            background: "#16191B",
+          }}
+        >
+          <span style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase" }}>
+            Topological Invariants Ledger
+          </span>
+          <button
+            onClick={() => {
+              const tableRows = rows.map((r) => ({
+                name: r.name,
+                formula: r.name.includes("|V|") ? "|V|" : r.name.includes("|E|") ? "|E|" : r.name.includes("β₀") ? "\\beta_0" : r.name.includes("β₁") ? "\\beta_1" : r.name.includes("β₂") ? "\\beta_2" : r.name,
+                value: String(r.value),
+              }));
+              const tex = generateLaTeXTable("Graph_Invariants", tableRows);
+              navigator.clipboard.writeText(tex);
+              setCopiedLatex(true);
+              setTimeout(() => setCopiedLatex(false), 2000);
+            }}
+            style={{
+              background: copiedLatex ? "#6B8075" : "#2C313380",
+              border: "1px solid #2C3133",
+              borderRadius: 5,
+              color: copiedLatex ? "#141617" : "#E6E4DF",
+              fontSize: 10,
+              fontWeight: 700,
+              padding: "4px 10px",
+              cursor: "pointer",
+              fontFamily: "'Courier New', monospace",
+              transition: "all 0.2s ease",
+            }}
+          >
+            {copiedLatex ? "✓ COPIED LATEX" : "📋 COPY LATEX"}
+          </button>
+        </div>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid #2C3133" }}>
