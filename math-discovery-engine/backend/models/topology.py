@@ -126,6 +126,14 @@ class TopologyMetadata(BaseModel):
         default_factory=dict,
         description="Classification of graph family properties (is_tree, is_bipartite, is_eulerian, girth, etc.).",
     )
+    ihara_zeta: Union[dict, None] = Field(
+        default=None,
+        description="Ihara zeta polynomial, poles, and Ramanujan expander verification.",
+    )
+    ricci_curvature: Union[dict, None] = Field(
+        default=None,
+        description="Discrete Ollivier-Ricci edge curvature and bottleneck analysis.",
+    )
 
 
 class MathResponse(BaseModel):

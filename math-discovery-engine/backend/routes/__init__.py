@@ -21,6 +21,7 @@ from .gnn import router as gnn_router
 from .cache import router as cache_router
 from .domains import router as domains_router
 from .sessions import router as sessions_router
+from .frontiers import router as frontiers_router
 
 api_router = APIRouter()
 
@@ -42,5 +43,6 @@ api_router.include_router(gnn_router)
 api_router.include_router(cache_router)
 api_router.include_router(domains_router)
 api_router.include_router(sessions_router)
+api_router.include_router(frontiers_router)
 
 __all__ = ["api_router"]

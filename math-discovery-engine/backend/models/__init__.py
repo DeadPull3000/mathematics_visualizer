@@ -21,6 +21,16 @@ from .wl import WLRequest, WLResponse
 from .oracle import OracleRequest, OracleResponse
 from .narrator import NarratorRequest, NarratorResponse
 from .gnn import GNNInspectRequest, GNNInspectResponse
+from .frontiers import (
+    IharaPole,
+    IharaRequest,
+    IharaResponse,
+    RicciEdge,
+    RicciRequest,
+    RicciResponse,
+    TropicalRequest,
+    TropicalResponse,
+)
 
 __all__ = [
     "InputType",
@@ -48,4 +58,12 @@ __all__ = [
     "NarratorResponse",
     "GNNInspectRequest",
     "GNNInspectResponse",
+    "IharaPole",
+    "IharaRequest",
+    "IharaResponse",
+    "RicciEdge",
+    "RicciRequest",
+    "RicciResponse",
+    "TropicalRequest",
+    "TropicalResponse",
 ]

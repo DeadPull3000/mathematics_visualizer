@@ -17,6 +17,8 @@ from models.topology import GraphMetadata, TopologyMetadata
 from ml_engine import compute_gradient_saliency
 from topology import compute_spectral_topology, compute_simplicial_homology
 from .classifier import classify_graph
+from .ihara import compute_ihara_zeta
+from .ricci import compute_ollivier_ricci
 
 log = logging.getLogger("math-engine.services.topology")
 
@@ -62,6 +64,21 @@ def compute_full_topology(graph: nx.Graph) -> TopologyMetadata:
     saliency = compute_gradient_saliency(graph)
     family_classification = classify_graph(graph)
 
+    # Phase 6: Mathematical Frontiers (Ihara Zeta & Ollivier-Ricci Curvature)
+    ihara_data = None
+    ricci_data = None
+    try:
+        if graph.number_of_nodes() <= 60:
+            ihara_data = compute_ihara_zeta(graph)
+    except Exception as e:
+        log.warning(f"Ihara zeta calculation skipped: {e}")
+
+    try:
+        if graph.number_of_edges() <= 200:
+            ricci_data = compute_ollivier_ricci(graph)
+    except Exception as e:
+        log.warning(f"Ricci curvature calculation skipped: {e}")
+
     return TopologyMetadata(
         laplacian_eigenvalues=spec["laplacian_eigenvalues"],
         fiedler_vector=spec["fiedler_vector"],
@@ -75,6 +92,8 @@ def compute_full_topology(graph: nx.Graph) -> TopologyMetadata:
         h1_generators=homology["h1_generators"],
         triangles=homology["triangles"],
         graph_family=family_classification,
+        ihara_zeta=ihara_data,
+        ricci_curvature=ricci_data,
     )
 
 

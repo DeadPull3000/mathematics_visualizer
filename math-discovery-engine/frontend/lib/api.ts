@@ -98,6 +98,8 @@ export interface TopologyMetadata {
     clustering_coefficient?: number;
     transitivity?: number;
   };
+  ihara_zeta?: IharaResponse;
+  ricci_curvature?: RicciResponse;
 }
 
 /** Response from POST /api/process-object */
@@ -564,6 +566,7 @@ export interface AlgebraicRequest {
 
 /** Response from POST /api/process-algebraic */
 export interface AlgebraicResponse {
+  formula?: string;
   /** Isosurface vertices with 3D display coordinates. */
   nodes: { id: number; fx: number; fy: number; fz: number }[];
   /** Triangular faces as [v0, v1, v2] index triples. */
@@ -997,5 +1000,84 @@ export async function saveExploration(
 export async function deleteSession(sessionId: string): Promise<{ status: string; session_id: string }> {
   return apiFetch<{ status: string; session_id: string }>(`/api/sessions/${sessionId}`, {
     method: "DELETE",
+  });
+}
+
+
+// --- Phase 6: Mathematical Frontiers types ----------------------------------
+
+export interface IharaPole {
+  re: number;
+  im: number;
+  abs: number;
+}
+
+export interface IharaResponse {
+  num_vertices: number;
+  num_edges: number;
+  cyclomatic_rank: number;
+  bass_polynomial_coeffs: number[];
+  is_regular: boolean;
+  degree: number;
+  is_ramanujan: boolean;
+  ramanujan_bound: number;
+  critical_radius: number;
+  lambda_2: number;
+  girth: number | null;
+  poles_count: number;
+  poles: IharaPole[];
+  latex_formula: string;
+  explanation: string;
+}
+
+export interface RicciEdge {
+  u: number | string;
+  v: number | string;
+  curvature: number;
+  type: "cluster" | "flat" | "bottleneck";
+}
+
+export interface RicciResponse {
+  edges: RicciEdge[];
+  average_curvature: number;
+  min_curvature: number;
+  max_curvature: number;
+  bottlenecks: (number | string)[][];
+  clusters: (number | string)[][];
+  diameter: number;
+  explanation: string;
+}
+
+export interface TropicalResponse {
+  formula: string;
+  monomials: { x_pow: number; y_pow: number; coeff: number }[];
+  newton_polygon_vertices: number[][];
+  area: number;
+  boundary_points_count: number;
+  interior_lattice_points: number[][];
+  tropical_genus: number;
+  corner_vertices: { x: number; y: number; terms: number[] }[];
+  latex_summary: string;
+  explanation: string;
+}
+
+export async function computeIharaZeta(rawData: string, inputType: string = "edge_list"): Promise<IharaResponse> {
+  return apiFetch<IharaResponse>("/api/frontiers/ihara", {
+    method: "POST",
+    body: JSON.stringify({ raw_data: rawData, input_type: inputType }),
+  });
+}
+
+export async function computeOllivierRicci(rawData: string, inputType: string = "edge_list", alpha: number = 0.0): Promise<RicciResponse> {
+  return apiFetch<RicciResponse>("/api/frontiers/ricci", {
+    method: "POST",
+    body: JSON.stringify({ raw_data: rawData, input_type: inputType, alpha }),
+  });
+}
+
+export async function analyzeTropicalCurve(formula: string): Promise<TropicalResponse> {
+  return apiFetch<TropicalResponse>("/api/frontiers/tropical", {
+    method: "POST",
+    body: JSON.stringify({ formula }),
   });
 }

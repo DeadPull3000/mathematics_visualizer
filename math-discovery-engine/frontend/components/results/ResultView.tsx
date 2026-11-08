@@ -7,6 +7,7 @@ import GraphVisualizer, { ViewMode } from "@/components/GraphVisualizer";
 import { generateLaTeXTable } from "@/lib/exportUtils";
 import { ProfessorNotes } from "@/components/ProfessorNotes";
 import { GNNPlayground } from "@/components/GNNPlayground";
+import { FrontiersInspector } from "@/components/FrontiersInspector";
 
 export interface ResultViewProps {
   result: MathResponse;
@@ -854,6 +855,14 @@ export function ResultView({
             result.topology.saliency_scores = newSaliency;
           }
         }}
+      />
+
+      {/* ── Mathematical Frontiers (Ihara Zeta & Ollivier-Ricci Curvature) ── */}
+      <FrontiersInspector
+        nodes={result.nodes}
+        edges={result.edges}
+        initialIhara={result.topology?.ihara_zeta}
+        initialRicci={result.topology?.ricci_curvature}
       />
 
       {/* ── Professor's Notes (Academic Commentary) ── */}

@@ -1,6 +1,7 @@
 "use client";
 
 import { ProfessorNotes } from "@/components/ProfessorNotes";
+import { TropicalInspector } from "@/components/TropicalInspector";
 
 import React from "react";
 import { Domain } from "@/types/domain";
@@ -590,6 +591,9 @@ export function AlgebraicResultView({
           </div>
         </div>
       )}
+
+      {/* Tropical Geometry & Newton Polygons */}
+      <TropicalInspector initialFormula={algebraicResult.formula ?? "y**2 - x**3 - x - 1"} />
 
       {/* Professor's Notes */}
       <ProfessorNotes domain="algebraic" invariants={algebraicResult as unknown as Record<string, unknown>} />
