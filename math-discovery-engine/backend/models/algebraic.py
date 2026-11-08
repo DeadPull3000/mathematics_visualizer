@@ -9,6 +9,7 @@ class AlgebraicRequest(BaseModel):
     formula: str = Field(..., description="Implicit polynomial equation F(x, y, z) = 0")
     resolution: int = Field(30, description="Grid resolution for marching cubes")
     bounds: float = Field(3.0, description="Spatial bounds for x, y, z [-bounds, bounds]")
+    parameter_t: float = Field(0.0, description="Continuous parameter t for dynamic bifurcation/morphing")
 
 
 class AlgebraicResponse(BaseModel):
@@ -20,3 +21,5 @@ class AlgebraicResponse(BaseModel):
     saliency_scores: dict[int, float] = Field(..., description="Singularity Score mapping node ID to [0.0, 1.0]")
     jacobian: list[str] = Field(default_factory=list, description="Symbolic Jacobian [Fx, Fy, Fz]")
     exact_singularities: list[dict] = Field(default_factory=list, description="Exact symbolic singular points")
+    grobner_basis: list[str] = Field(default_factory=list, description="Gröbner basis under lexicographic term order")
+    hessian_determinant: str = Field("", description="Determinant of the Hessian matrix det(H(F))")

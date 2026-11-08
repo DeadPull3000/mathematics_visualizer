@@ -77,6 +77,12 @@ export interface TopologyMetadata {
    * Higher values indicate structurally anomalous / salient nodes.
    */
   saliency_scores?: Record<string, number>;
+  normalized_eigenvalues?: number[];
+  spectral_gap?: number;
+  cheeger_bounds?: { lower: number; upper: number };
+  heat_kernel_signatures?: Record<string, Record<string, number>>;
+  h1_generators?: (number | string)[][];
+  triangles?: (number | string)[][];
 }
 
 /** Response from POST /api/process-object */
@@ -135,6 +141,9 @@ export interface KnotResponse {
   invariants: KnotInvariants;
   /** Local entanglement saliency from the Gauss Linking Integral — node ID → [0, 1]. */
   saliency_scores?: Record<string, number>;
+  alexander_polynomial?: string;
+  genus?: number;
+  bridge_index?: number;
 }
 
 // --- Topology (Surfaces & Manifolds) types -----------------------------------
@@ -168,6 +177,7 @@ export interface ManifoldRequest {
   v_max?: number;
   /** Node IDs to excise from the manifold mesh (Manifold Surgery). */
   deleted_nodes?: number[];
+  parameter_t?: number;
 }
 
 /** Topological invariants of the discretised manifold mesh. */
@@ -197,6 +207,8 @@ export interface ManifoldResponse {
    * Maps node ID (string key) to a signed float.
    */
   harmonics: Record<string, number>;
+  gaussian_curvature?: Record<string, number>;
+  mean_curvature?: Record<string, number>;
 }
 
 // --- Typed error class -------------------------------------------------------
@@ -517,6 +529,7 @@ export interface AlgebraicRequest {
    * @default 3.0
    */
   bounds?: number;
+  parameter_t?: number;
 }
 
 /** Response from POST /api/process-algebraic */
@@ -551,6 +564,8 @@ export interface AlgebraicResponse {
    * May contain an `error` key if the system was too complex to solve in time.
    */
   exact_singularities?: Record<string, string>[];
+  grobner_basis?: string[];
+  hessian_determinant?: string;
 }
 
 /**

@@ -279,6 +279,89 @@ export function ManifoldResultView({
           onNodeRemove={onNodeRemove}
         />
       </div>
+
+      {/* ── Differential Geometry: Discrete Curvatures & Gauss-Bonnet ── */}
+      {manifoldResult.gaussian_curvature && (
+        <div
+          style={{
+            border: "1px solid #2C3133",
+            borderRadius: 10,
+            background: "#1C1F21",
+            padding: "16px 20px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 10,
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  color: "#6B8075",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Discrete Differential Geometry & Gauss-Bonnet Theorem
+              </div>
+              <div style={{ color: "#888C8E", fontSize: 11, marginTop: 2 }}>
+                Gauss-Bonnet Integral: ∫_M K dA = 2π χ(M)
+              </div>
+            </div>
+            <div
+              style={{
+                background: "#2C3133",
+                borderRadius: 6,
+                padding: "4px 10px",
+                fontFamily: "'Courier New', monospace",
+                fontSize: 12,
+                color: "#D19E4A",
+                fontWeight: 700,
+              }}
+            >
+              2π χ = {(2 * Math.PI * inv.euler_characteristic).toFixed(4)}
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+            <div
+              style={{
+                background: "#0F1113",
+                border: "1px solid #2C3133",
+                borderRadius: 8,
+                padding: "10px 14px",
+              }}
+            >
+              <div style={{ color: "#888C8E", fontSize: 10, textTransform: "uppercase", marginBottom: 4 }}>
+                Gaussian Curvature K_i (Angle Deficit)
+              </div>
+              <div style={{ color: "#E6E4DF", fontSize: 11 }}>
+                Computed via (2π − ∑ θ_ijk) / A_i Voronoi area.
+              </div>
+            </div>
+            <div
+              style={{
+                background: "#0F1113",
+                border: "1px solid #2C3133",
+                borderRadius: 8,
+                padding: "10px 14px",
+              }}
+            >
+              <div style={{ color: "#888C8E", fontSize: 10, textTransform: "uppercase", marginBottom: 4 }}>
+                Mean Curvature H_i (Laplace-Beltrami)
+              </div>
+              <div style={{ color: "#E6E4DF", fontSize: 11 }}>
+                Computed via ‖Δ_LB x_i‖ with cotangent weights.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

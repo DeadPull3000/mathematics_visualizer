@@ -5,23 +5,40 @@ from skimage.measure import marching_cubes
 import sympy as sp
 import concurrent.futures
 
-def generate_algebraic_variety(formula: str, res: int = 30, bounds: float = 3.0) -> dict:
+def generate_algebraic_variety(formula: str, res: int = 30, bounds: float = 3.0, parameter_t: float = 0.0) -> dict:
     """
     Evaluates an implicit polynomial equation F(x, y, z) = 0 and extracts its
-    isosurface using the Marching Cubes algorithm.
+    isosurface using the Marching Cubes algorithm, computing the Jacobian,
+    Hessian determinant, and Gröbner basis for singular locus identification.
     """
     # --- EXACT SYMBOLIC COMPUTATION ---
     jacobian_strs = []
     exact_sings = []
+    grobner_strs = []
+    hessian_det_str = ""
     
     try:
-        x_sym, y_sym, z_sym = sp.symbols('x y z')
-        F = sp.sympify(formula)
+        x_sym, y_sym, z_sym, t_sym = sp.symbols('x y z t')
+        # Substitute parameter_t into formula if t appears
+        F_raw = sp.sympify(formula)
+        F = F_raw.subs(t_sym, parameter_t)
+        
         Fx = sp.diff(F, x_sym)
         Fy = sp.diff(F, y_sym)
         Fz = sp.diff(F, z_sym)
         
         jacobian_strs = [str(Fx), str(Fy), str(Fz)]
+        
+        # Hessian matrix & determinant
+        H = sp.hessian(F, (x_sym, y_sym, z_sym))
+        hessian_det_str = str(sp.det(H))
+
+        # Gröbner basis computation under lexicographic term order
+        try:
+            gb = sp.groebner([F, Fx, Fy, Fz], (x_sym, y_sym, z_sym), order='lex')
+            grobner_strs = [str(poly) for poly in gb]
+        except Exception:
+            grobner_strs = []
         
         def solve_singularities():
             return sp.solve([F, Fx, Fy, Fz], (x_sym, y_sym, z_sym), dict=True)
@@ -48,7 +65,7 @@ def generate_algebraic_variety(formula: str, res: int = 30, bounds: float = 3.0)
     X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
     
     # 2. Evaluate the formula using numexpr
-    local_dict = {'x': X, 'y': Y, 'z': Z}
+    local_dict = {'x': X, 'y': Y, 'z': Z, 't': parameter_t}
     try:
         # V is a 3D numpy array of shape (res, res, res)
         V = ne.evaluate(formula, local_dict=local_dict)
@@ -147,5 +164,7 @@ def generate_algebraic_variety(formula: str, res: int = 30, bounds: float = 3.0)
         },
         "saliency_scores": saliency_scores,
         "jacobian": jacobian_strs,
-        "exact_singularities": exact_sings
+        "exact_singularities": exact_sings,
+        "grobner_basis": grobner_strs,
+        "hessian_determinant": hessian_det_str,
     }

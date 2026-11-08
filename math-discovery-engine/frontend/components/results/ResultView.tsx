@@ -578,6 +578,149 @@ export function ResultView({
           </div>
         </div>
       )}
+
+      {/* ── Spectral Expansion & Cheeger Bounds ── */}
+      {result.topology?.cheeger_bounds && (
+        <div
+          style={{
+            background: "#1C1F21",
+            border: "1px solid #2C3133",
+            borderRadius: 10,
+            padding: "16px 20px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 10,
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  color: "#D19E4A",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Cheeger Conductance Bounds & Spectral Gap
+              </div>
+              <div style={{ color: "#888C8E", fontSize: 11, marginTop: 2 }}>
+                Cheeger Inequality: ν₁ / 2 ≤ h(G) ≤ √(2ν₁)
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <div
+                style={{
+                  background: "#2C3133",
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  fontSize: 11,
+                  fontFamily: "'Courier New', monospace",
+                  color: "#6B8075",
+                  fontWeight: 700,
+                }}
+              >
+                h_lower: {result.topology.cheeger_bounds.lower?.toFixed(4) ?? "0.0000"}
+              </div>
+              <div
+                style={{
+                  background: "#2C3133",
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  fontSize: 11,
+                  fontFamily: "'Courier New', monospace",
+                  color: "#C05640",
+                  fontWeight: 700,
+                }}
+              >
+                h_upper: {result.topology.cheeger_bounds.upper?.toFixed(4) ?? "0.0000"}
+              </div>
+            </div>
+          </div>
+          <div style={{ color: "#E6E4DF", fontSize: 12, fontFamily: "'Georgia', serif" }}>
+            Normalized Spectral Gap ν₁ ={" "}
+            <span style={{ color: "#D19E4A", fontWeight: 700 }}>
+              {result.topology.spectral_gap?.toFixed(4) ?? "0.0000"}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Simplicial Homology H1 Generators & 2-Simplices ── */}
+      {result.topology && (
+        <div
+          style={{
+            background: "#1C1F21",
+            border: "1px solid #2C3133",
+            borderRadius: 10,
+            padding: "16px 20px",
+          }}
+        >
+          <div
+            style={{
+              color: "#6B8075",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              marginBottom: 8,
+            }}
+          >
+            Simplicial Complex: 2-Simplices & Non-Bounding Cycle Generators
+          </div>
+          <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: "#888C8E" }}>
+              Filled 2-Simplices (Triangles):{" "}
+              <span style={{ color: "#E6E4DF", fontWeight: 700 }}>
+                {result.topology.triangles?.length ?? 0}
+              </span>
+            </div>
+            <div style={{ fontSize: 12, color: "#888C8E" }}>
+              H₁ Homology Rank (Holes):{" "}
+              <span style={{ color: "#C05640", fontWeight: 700 }}>
+                {result.topology.betti_numbers[1] ?? 0}
+              </span>
+            </div>
+          </div>
+
+          {result.topology.h1_generators && result.topology.h1_generators.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 11, color: "#888C8E", marginBottom: 4 }}>
+                Independent Non-Bounding 1-Cycle Generators (ker D₁ / im D₂):
+              </div>
+              {result.topology.h1_generators.map((gen, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background: "#0F1113",
+                    border: "1px solid #2C3133",
+                    borderRadius: 6,
+                    padding: "6px 12px",
+                    fontFamily: "'Courier New', monospace",
+                    fontSize: 11,
+                    color: "#D19E4A",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ color: "#888C8E" }}>Generator #{idx + 1}:</span>
+                  <span>[{gen.join(" → ")} → {gen[0]}]</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: "#888C8E", fontStyle: "italic" }}>
+              All 1-cycles boundary-fill completely into 2-simplices (no non-bounding 1-holes).
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

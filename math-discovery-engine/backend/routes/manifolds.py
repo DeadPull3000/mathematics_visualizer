@@ -25,6 +25,7 @@ async def process_manifold(payload: ManifoldRequest) -> ManifoldResponse:
             shape=payload.shape,
             res=payload.resolution,
             deformation=payload.deformation,
+            parameter_t=payload.parameter_t,
             expr_x=payload.expr_x,
             expr_y=payload.expr_y,
             expr_z=payload.expr_z,

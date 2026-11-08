@@ -491,6 +491,101 @@ export function AlgebraicResultView({
               )}
             </div>
           </div>
+
+          {/* ── BOTTOM ROW: Gröbner Basis & Hessian Determinant ── */}
+          <div
+            style={{
+              borderTop: "1px solid #2C3133",
+              padding: "16px 20px",
+              background: "#0A0C0E",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 20,
+            }}
+          >
+            {/* Gröbner Basis */}
+            <div>
+              <div
+                style={{
+                  color: "#D19E4A",
+                  fontSize: 9,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  fontWeight: 700,
+                  marginBottom: 8,
+                }}
+              >
+                Gröbner Basis ⟨F, ∇F⟩ (Lexicographic Order)
+              </div>
+              {algebraicResult.grobner_basis && algebraicResult.grobner_basis.length > 0 ? (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {algebraicResult.grobner_basis.map((poly, idx) => (
+                    <code
+                      key={idx}
+                      style={{
+                        background: poly === "1" ? "#6B807522" : "#1A1D1F",
+                        border: `1px solid ${poly === "1" ? "#6B8075" : "#2C3133"}`,
+                        color: poly === "1" ? "#6B8075" : "#E6E4DF",
+                        borderRadius: 5,
+                        padding: "3px 8px",
+                        fontFamily: "'Courier New', monospace",
+                        fontSize: 11,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {poly}
+                    </code>
+                  ))}
+                  {algebraicResult.grobner_basis.includes("1") && (
+                    <div style={{ color: "#6B8075", fontSize: 10, marginTop: 4, width: "100%" }}>
+                      ✓ 1 ∈ ⟨F, ∇F⟩ — Nullstellensatz certificate of global smoothness.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ color: "#555A5D", fontSize: 11, fontStyle: "italic" }}>
+                  Trivial ideal
+                </div>
+              )}
+            </div>
+
+            {/* Hessian Determinant */}
+            <div>
+              <div
+                style={{
+                  color: "#6B8075",
+                  fontSize: 9,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  fontWeight: 700,
+                  marginBottom: 8,
+                }}
+              >
+                Hessian Determinant det(H(F))
+              </div>
+              {algebraicResult.hessian_determinant ? (
+                <code
+                  style={{
+                    display: "block",
+                    background: "#1A1D1F",
+                    border: "1px solid #2C3133",
+                    borderRadius: 6,
+                    padding: "6px 10px",
+                    fontFamily: "'Courier New', monospace",
+                    fontSize: 11,
+                    color: "#E6E4DF",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {algebraicResult.hessian_determinant}
+                </code>
+              ) : (
+                <div style={{ color: "#555A5D", fontSize: 11, fontStyle: "italic" }}>
+                  Not computed
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

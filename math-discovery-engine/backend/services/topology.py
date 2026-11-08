@@ -15,7 +15,7 @@ import scipy.linalg
 
 from models.topology import GraphMetadata, TopologyMetadata
 from ml_engine import compute_gradient_saliency
-from topology import compute_spectral_topology, compute_betti_numbers
+from topology import compute_spectral_topology, compute_simplicial_homology
 
 log = logging.getLogger("math-engine.services.topology")
 
@@ -53,19 +53,25 @@ def compute_metadata(graph: nx.Graph, planarity_limit: int = 1000) -> GraphMetad
 
 def compute_full_topology(graph: nx.Graph) -> TopologyMetadata:
     """
-    Compute Combinatorial Laplacian eigenvalues, Fiedler vector, Betti numbers,
-    and neural gradient saliency scores.
+    Compute Combinatorial Laplacian eigenvalues, Normalized Laplacian, Cheeger bounds,
+    Heat Kernel Signatures, Betti numbers, triangles, H1 cycle generators, and neural saliency.
     """
     spec = compute_spectral_topology(graph)
-    betti = compute_betti_numbers(graph)
+    homology = compute_simplicial_homology(graph)
     saliency = compute_gradient_saliency(graph)
 
     return TopologyMetadata(
         laplacian_eigenvalues=spec["laplacian_eigenvalues"],
         fiedler_vector=spec["fiedler_vector"],
         algebraic_connectivity=spec["algebraic_connectivity"],
-        betti_numbers=betti,
+        betti_numbers=homology["betti_numbers"],
         saliency_scores=saliency,
+        normalized_eigenvalues=spec["normalized_eigenvalues"],
+        spectral_gap=spec["spectral_gap"],
+        cheeger_bounds=spec["cheeger_bounds"],
+        heat_kernel_signatures=spec["heat_kernel_signatures"],
+        h1_generators=homology["h1_generators"],
+        triangles=homology["triangles"],
     )
 
 

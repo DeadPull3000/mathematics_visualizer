@@ -17,3 +17,6 @@ def test_process_algebraic_cone(client):
     assert "exact_singularities" in data
     # Cone apex at origin (0, 0, 0)
     assert len(data["exact_singularities"]) > 0
+    assert "grobner_basis" in data
+    assert "hessian_determinant" in data
+    assert len(data["grobner_basis"]) > 0

@@ -14,3 +14,6 @@ def test_process_manifold_sphere(client):
     assert len(data["faces"]) > 0
     assert "invariants" in data
     assert "euler_characteristic" in data["invariants"]
+    assert "gaussian_curvature" in data
+    assert "mean_curvature" in data
+    assert len(data["gaussian_curvature"]) > 0

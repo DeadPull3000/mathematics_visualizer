@@ -11,6 +11,9 @@ def test_process_knot_trefoil(client):
     assert "invariants" in data
     assert data["invariants"]["p"] == 3
     assert data["invariants"]["q"] == 2
+    assert "alexander_polynomial" in data
+    assert data["genus"] == 1
+    assert data["bridge_index"] == 2
 
 
 def test_process_knot_invalid_formula(client):

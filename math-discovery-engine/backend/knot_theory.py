@@ -1,4 +1,16 @@
 import numpy as np
+import sympy as sp
+
+def compute_alexander_polynomial(p: int, q: int) -> str:
+    """Computes the exact Alexander polynomial Delta(t) for a (p, q)-torus knot."""
+    try:
+        t = sp.symbols('t')
+        num = (t**(p * q) - 1) * (t - 1)
+        den = (t**p - 1) * (t**q - 1)
+        poly = sp.cancel(num / den)
+        return str(sp.expand(poly))
+    except Exception:
+        return "1"
 
 def compute_gauss_linking_integral(nodes: list[dict]) -> tuple[float, dict]:
     """
@@ -75,6 +87,9 @@ def generate_torus_knot(p: int, q: int, num_points: int = 200) -> dict:
     edges = [[i, (i + 1) % num_points] for i in range(num_points)]
     
     crossing_number = min(p * (q - 1), q * (p - 1))
+    genus = (p - 1) * (q - 1) // 2
+    bridge_index = min(p, q)
+    alexander_poly = compute_alexander_polynomial(p, q)
     
     writhe, saliency = compute_gauss_linking_integral(nodes)
     
@@ -88,5 +103,8 @@ def generate_torus_knot(p: int, q: int, num_points: int = 200) -> dict:
             "type": "Torus Knot",
             "writhe": writhe
         },
-        "saliency_scores": saliency
+        "saliency_scores": saliency,
+        "alexander_polynomial": alexander_poly,
+        "genus": int(genus),
+        "bridge_index": int(bridge_index),
     }

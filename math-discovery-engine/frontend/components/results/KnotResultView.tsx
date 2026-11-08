@@ -23,6 +23,8 @@ export function KnotResultView({
     { name: "Knot Type", value: inv.type, color: domain.color, desc: "Family of knot / link" },
     { name: "Parameters (p,q)", value: `(${inv.p}, ${inv.q})`, color: "#D19E4A", desc: "Torus knot winding numbers" },
     { name: "Crossing Number", value: inv.crossing_number, color: "#C05640", desc: "Minimum crossings over all diagrams" },
+    { name: "Seifert Genus g", value: knotResult.genus ?? (inv.p - 1) * (inv.q - 1) / 2, color: "#D19E4A", desc: "Minimal genus of spanning surface: (p-1)(q-1)/2" },
+    { name: "Bridge Index b", value: knotResult.bridge_index ?? Math.min(inv.p, inv.q), color: "#6B8075", desc: "Minimal local maxima in any diagram" },
     { name: "Strand Count", value: knotResult.nodes.length, color: "#6B8075", desc: "Parametric sample points" },
     {
       name: "Writhe (Gauss)",
@@ -319,6 +321,50 @@ export function KnotResultView({
           height={400}
         />
       </div>
+
+      {/* ── Topological Knot Invariants: Alexander Polynomial ── */}
+      {knotResult.alexander_polynomial && (
+        <div
+          style={{
+            border: "1px solid #2C3133",
+            borderRadius: 10,
+            background: "#1C1F21",
+            padding: "16px 20px",
+          }}
+        >
+          <div
+            style={{
+              color: "#D19E4A",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              marginBottom: 8,
+            }}
+          >
+            Alexander Polynomial Δ(t)
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+            <code
+              style={{
+                background: "#0F1113",
+                border: "1px solid #2C3133",
+                borderRadius: 6,
+                padding: "8px 14px",
+                fontFamily: "'Courier New', monospace",
+                fontSize: 14,
+                fontWeight: 700,
+                color: "#E6E4DF",
+              }}
+            >
+              Δ(t) = {knotResult.alexander_polynomial}
+            </code>
+          </div>
+          <div style={{ color: "#888C8E", fontSize: 11 }}>
+            Computed via exact algebraic quotient: Δ(t) = (t^(pq) − 1)(t − 1) / ((t^p − 1)(t^q − 1)).
+          </div>
+        </div>
+      )}
     </div>
   );
 }

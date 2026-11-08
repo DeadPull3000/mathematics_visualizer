@@ -77,7 +77,7 @@ class GraphMetadata(BaseModel):
 
 
 class TopologyMetadata(BaseModel):
-    """Spectral and topological features computed from the graph's Laplacian."""
+    """Spectral and topological features computed from the graph's Laplacian and Simplicial Complex."""
     laplacian_eigenvalues: list[float] = Field(
         ...,
         description="Sorted eigenvalues of the Laplacian matrix.",
@@ -97,6 +97,30 @@ class TopologyMetadata(BaseModel):
     saliency_scores: dict[Union[int, str], float] = Field(
         ...,
         description="Structural saliency scores mapping node ID to a float between 0.0 and 1.0.",
+    )
+    normalized_eigenvalues: list[float] = Field(
+        default_factory=list,
+        description="Sorted eigenvalues of the normalized Laplacian L_norm = D^{-1/2} L D^{-1/2}.",
+    )
+    spectral_gap: float = Field(
+        0.0,
+        description="Normalized spectral gap nu_1 (rate of convergence of random walk).",
+    )
+    cheeger_bounds: dict[str, float] = Field(
+        default_factory=dict,
+        description="Cheeger inequality conductance bounds: {'lower': ..., 'upper': ...}.",
+    )
+    heat_kernel_signatures: dict[str, dict[Union[int, str], float]] = Field(
+        default_factory=dict,
+        description="Multi-scale Heat Kernel Signatures at diffusion timescales t=0.1, t=1.0, t=10.0.",
+    )
+    h1_generators: list[list[Union[int, str]]] = Field(
+        default_factory=list,
+        description="Independent 1-cycle generators representing topological holes.",
+    )
+    triangles: list[list[Union[int, str]]] = Field(
+        default_factory=list,
+        description="2-simplices (triangles) forming the 2-skeleton of the clique complex.",
     )
 
 

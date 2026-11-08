@@ -58,10 +58,77 @@ def compute_cotangent_laplacian(nodes: list[dict], faces: list[list[int]]) -> np
     return L
 
 
+def compute_discrete_curvatures(nodes: list[dict], faces: list[list[int]]) -> tuple[dict, dict]:
+    """
+    Computes discrete Gaussian curvature K_i (via angle deficit) and Mean curvature H_i
+    (via Laplace-Beltrami operator norm) for each vertex on the triangular mesh.
+    """
+    N = len(nodes)
+    if N == 0:
+        return {}, {}
+        
+    id_to_idx = {n["id"]: idx for idx, n in enumerate(nodes)}
+    idx_to_id = {idx: n["id"] for idx, n in enumerate(nodes)}
+    V = np.array([[n["fx"], n["fy"], n["fz"]] for n in nodes], dtype=float)
+    
+    angle_sums = np.zeros(N)
+    vertex_areas = np.zeros(N)
+    
+    def angle_at(p0, p1, p2):
+        u = p1 - p0
+        v = p2 - p0
+        nu = la.norm(u)
+        nv = la.norm(v)
+        if nu < 1e-8 or nv < 1e-8:
+            return 0.0
+        cos_val = np.dot(u, v) / (nu * nv)
+        return float(np.arccos(np.clip(cos_val, -1.0, 1.0)))
+
+    for face in faces:
+        if not all(v in id_to_idx for v in face):
+            continue
+        i, j, k = [id_to_idx[v] for v in face]
+        pi, pj, pk = V[i], V[j], V[k]
+        
+        # Face area
+        area = 0.5 * la.norm(np.cross(pj - pi, pk - pi))
+        vertex_areas[i] += area / 3.0
+        vertex_areas[j] += area / 3.0
+        vertex_areas[k] += area / 3.0
+        
+        # Angles at each vertex
+        angle_sums[i] += angle_at(pi, pj, pk)
+        angle_sums[j] += angle_at(pj, pi, pk)
+        angle_sums[k] += angle_at(pk, pi, pj)
+        
+    gaussian_curv = {}
+    for idx in range(N):
+        node_id = idx_to_id[idx]
+        deficit = (2.0 * np.pi) - angle_sums[idx]
+        area = max(vertex_areas[idx], 1e-6)
+        gaussian_curv[node_id] = round(float(deficit / area), 5)
+        
+    L = compute_cotangent_laplacian(nodes, faces)
+    mean_curv = {}
+    if L.size > 0:
+        LV = L @ V
+        for idx in range(N):
+            node_id = idx_to_id[idx]
+            area = max(vertex_areas[idx], 1e-6)
+            H_val = 0.5 * la.norm(LV[idx]) / area
+            mean_curv[node_id] = round(float(H_val), 5)
+    else:
+        for idx in range(N):
+            mean_curv[idx_to_id[idx]] = 0.0
+            
+    return gaussian_curv, mean_curv
+
+
 def generate_manifold(
     shape: str,
     res: int = 15,
     deformation: str = "none",
+    parameter_t: float = 0.0,
     expr_x: str = "",
     expr_y: str = "",
     expr_z: str = "",
@@ -258,6 +325,9 @@ def generate_manifold(
     elif len(active_nodes) == 1:
         harmonics = {active_nodes[0]["id"]: 0.0}
     
+    # Compute Discrete Curvatures
+    gaussian_curv, mean_curv = compute_discrete_curvatures(active_nodes, active_faces)
+    
     return {
         "nodes": active_nodes,
         "edges": edges_list,
@@ -267,5 +337,7 @@ def generate_manifold(
             "edges": num_edges,
             "euler_characteristic": euler_char
         },
-        "harmonics": harmonics
+        "harmonics": harmonics,
+        "gaussian_curvature": gaussian_curv,
+        "mean_curvature": mean_curv,
     }

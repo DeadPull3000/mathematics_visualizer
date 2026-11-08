@@ -10,6 +10,7 @@ class ManifoldRequest(BaseModel):
     shape: str = Field(..., description="Manifold shape, e.g., 'Sphere', 'Torus', or 'Custom'")
     resolution: int = Field(15, description="Resolution of the parametric grid")
     deformation: str = Field("none", description="Deformation type: 'none', 'stretch', or 'ripple'")
+    parameter_t: float = Field(0.0, description="Continuous morphing parameter t")
     expr_x: str = Field("", description="Custom parametric equation for X(u, v)")
     expr_y: str = Field("", description="Custom parametric equation for Y(u, v)")
     expr_z: str = Field("", description="Custom parametric equation for Z(u, v)")
@@ -27,3 +28,5 @@ class ManifoldResponse(BaseModel):
     faces: list[list[int]] = Field(..., description="List of [node_i, node_j, node_k] triangular faces")
     invariants: dict = Field(..., description="Manifold invariants (vertices, edges, euler_characteristic)")
     harmonics: dict[Union[int, str], float] = Field(..., description="2nd non-zero eigenvector of the Combinatorial Laplacian")
+    gaussian_curvature: dict[Union[int, str], float] = Field(default_factory=dict, description="Discrete Gaussian curvature K_i per vertex")
+    mean_curvature: dict[Union[int, str], float] = Field(default_factory=dict, description="Discrete Mean curvature H_i per vertex")

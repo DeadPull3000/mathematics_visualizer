@@ -16,3 +16,6 @@ class KnotResponse(BaseModel):
     edges: list[list[int]] = Field(..., description="List of [source, target] edge pairs")
     invariants: dict = Field(..., description="Knot invariants (crossing_number, p, q, type, writhe)")
     saliency_scores: dict[Union[int, str], float] = Field(..., description="Local entanglement saliency scores mapping node ID to [0.0, 1.0].")
+    alexander_polynomial: str = Field("", description="Alexander polynomial Delta(t) of the knot")
+    genus: int = Field(0, description="Seifert genus g = (p-1)(q-1)/2")
+    bridge_index: int = Field(1, description="Bridge index min(p, q)")

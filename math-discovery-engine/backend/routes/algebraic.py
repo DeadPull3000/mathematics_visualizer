@@ -28,6 +28,7 @@ async def process_algebraic(payload: AlgebraicRequest) -> AlgebraicResponse:
             formula=payload.formula,
             res=payload.resolution,
             bounds=payload.bounds,
+            parameter_t=payload.parameter_t,
         )
         return AlgebraicResponse(**data)
     except ValueError as exc:
