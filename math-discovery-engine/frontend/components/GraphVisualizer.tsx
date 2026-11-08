@@ -479,6 +479,13 @@ function GraphVisualizerInner({
     [hoveredNode]
   );
 
+  // Adaptive Level-Of-Detail (LOD) computation (Phase 4)
+  const nodeCount = graphData.nodes.length;
+  const linkCount = graphData.links.length;
+  const lodLevel = nodeCount > 500 || linkCount > 1200 ? "FAST" : nodeCount > 150 ? "BALANCED" : "MAX";
+  const nodeResolution = lodLevel === "FAST" ? 6 : lodLevel === "BALANCED" ? 8 : 16;
+  const linkResolution = lodLevel === "FAST" ? 3 : 6;
+
   return (
     <div
       id="graph-3d-canvas"
@@ -692,9 +699,11 @@ function GraphVisualizerInner({
         linkDirectionalArrowRelPos={1}
         onLinkHover={isKnotMode ? undefined : handleLinkHover}
         onLinkClick={isKnotMode ? undefined : handleLinkClick}
-        // ── Performance ────────────────────────────────────────────────────
+        // ── Performance (Adaptive LOD - Phase 4) ──────────────────────────
+        nodeResolution={nodeResolution}
+        linkResolution={linkResolution}
         warmupTicks={isKnotMode || isCircuitMode ? 0 : 60}
-        cooldownTime={isKnotMode || isCircuitMode ? 0 : 3000}
+        cooldownTime={isKnotMode || isCircuitMode ? 0 : lodLevel === "FAST" ? 1500 : 3000}
         showNavInfo={false}
       />
 

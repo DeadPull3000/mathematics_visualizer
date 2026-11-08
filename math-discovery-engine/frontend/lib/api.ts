@@ -110,6 +110,10 @@ export interface MathResponse {
   metadata: GraphMetadata;
   /** Spectral graph theory metrics (Laplacian). */
   topology: TopologyMetadata;
+  /** Cache status ("HIT" | "MISS") injected by Phase 4 middleware. */
+  _cacheStatus?: string;
+  /** Execution latency in milliseconds. */
+  _latencyMs?: number;
 }
 
 /** Response from GET /health */
@@ -316,7 +320,18 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   // ── 4. Successful response — parse JSON safely ───────────────────────────
-  return safeParseJSON<T>(text, response.status);
+  const parsed = safeParseJSON<T>(text, response.status);
+  if (typeof parsed === "object" && parsed !== null) {
+    const cacheHeader = response.headers.get("X-Cache");
+    const timeHeader = response.headers.get("X-Process-Time-Ms");
+    if (cacheHeader) {
+      (parsed as Record<string, unknown>)._cacheStatus = cacheHeader;
+    }
+    if (timeHeader) {
+      (parsed as Record<string, unknown>)._latencyMs = parseFloat(timeHeader);
+    }
+  }
+  return parsed;
 }
 
 // --- Public API functions ----------------------------------------------------
@@ -833,3 +848,73 @@ export async function processOracle(request: OracleRequest): Promise<OracleRespo
   });
 }
 
+
+
+// ---------------------------------------------------------------------------
+// Server-Sent Events (SSE) Batch Streaming & Cache Telemetry (Phase 4)
+// ---------------------------------------------------------------------------
+
+export interface BatchStreamEvent {
+  current: number;
+  total: number;
+  sample: BatchDataPoint;
+}
+
+export async function streamBatch(
+  numSamples: number,
+  onProgress: (event: BatchStreamEvent) => void
+): Promise<BatchDataPoint[]> {
+  const url = `${API_BASE_URL}/api/stream-batch?num_samples=${numSamples}`;
+  const response = await fetch(url);
+  if (!response.ok || !response.body) {
+    throw new ApiError(response.status, "Failed to initiate Server-Sent Events stream");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const collected: BatchDataPoint[] = [];
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n\n");
+    buffer = lines.pop() ?? "";
+
+    for (const chunk of lines) {
+      const dataLine = chunk.split("\n").find((l) => l.startsWith("data: "));
+      if (dataLine) {
+        try {
+          const parsed = JSON.parse(dataLine.slice(6));
+          if (parsed.sample) {
+            collected.push(parsed.sample);
+            onProgress(parsed);
+          }
+        } catch {
+          // partial JSON chunk buffer
+        }
+      }
+    }
+  }
+
+  return collected;
+}
+
+export interface CacheStats {
+  size: number;
+  max_size: number;
+  hits: number;
+  misses: number;
+  evictions: number;
+  total_requests: number;
+  hit_ratio: number;
+}
+
+export async function getCacheStats(): Promise<CacheStats> {
+  return apiFetch<CacheStats>("/api/cache/stats");
+}
+
+export async function clearCache(): Promise<{ status: string }> {
+  return apiFetch<{ status: string }>("/api/cache/clear", { method: "POST" });
+}

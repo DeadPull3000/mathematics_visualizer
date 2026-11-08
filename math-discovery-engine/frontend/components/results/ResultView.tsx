@@ -239,9 +239,29 @@ export function ResultView({
             background: "#16191B",
           }}
         >
-          <span style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase" }}>
-            Topological Invariants Ledger
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ color: "#888C8E", fontSize: 10, letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase" }}>
+              Topological Invariants Ledger
+            </span>
+            {(result._cacheStatus || result._latencyMs !== undefined) && (
+              <span
+                style={{
+                  background: result._cacheStatus === "HIT" ? "#6B807530" : "#2C313380",
+                  border: `1px solid ${result._cacheStatus === "HIT" ? "#6B8075" : "#2C3133"}`,
+                  borderRadius: 4,
+                  padding: "2px 7px",
+                  fontSize: 9,
+                  fontFamily: "'Courier New', monospace",
+                  fontWeight: 700,
+                  color: result._cacheStatus === "HIT" ? "#6B8075" : "#888C8E",
+                }}
+                title="Response served from sub-millisecond calculation cache"
+              >
+                {result._cacheStatus === "HIT" ? "⚡ CACHE HIT" : "⚡ COMPUTED"}{" "}
+                {result._latencyMs?.toFixed(1)}ms
+              </span>
+            )}
+          </div>
           <button
             onClick={() => {
               const tableRows = rows.map((r) => ({

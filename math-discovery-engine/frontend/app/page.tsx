@@ -8,6 +8,7 @@ import {
   processCircuit,
   processAlgebraic,
   processBatch,
+  streamBatch,
   processTDA,
   processWL,
   processOracle,
@@ -85,6 +86,8 @@ export default function HomePage() {
   // batchData: results from the Batch Dataset Explorer.
   const [batchData, setBatchData] = useState<BatchDataPoint[] | null>(null);
   const [batchSamples, setBatchSamples] = useState(100);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamProgress, setStreamProgress] = useState<{ current: number; total: number } | null>(null);
   // Oracle: discovered conjectures from SVD null-space analysis.
   const [conjectures, setConjectures] = useState<string[] | null>(null);
   const [oracleResult, setOracleResult] = useState<OracleResponse | null>(null);
@@ -402,6 +405,31 @@ export default function HomePage() {
       setError(msg);
     } finally {
       setIsLoading(false);
+    }
+  }, []);
+
+  /** handleBatchStream — streams graph evaluations progressively via SSE (Phase 4). */
+  const handleBatchStream = useCallback(async (n: number) => {
+    setIsStreaming(true);
+    setError(null);
+    setBatchData([]);
+    setConjectures(null);
+    setOracleResult(null);
+    setStreamProgress({ current: 0, total: n });
+    try {
+      const items: BatchDataPoint[] = [];
+      await streamBatch(n, (event) => {
+        items.push(event.sample);
+        setBatchData([...items]);
+        setStreamProgress({ current: event.current, total: event.total });
+      });
+      setHistory([{ id: Date.now().toString(), type: "genesis", detail: `Streamed ${n} graphs (SSE)` }]);
+    } catch (err) {
+      let msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+    } finally {
+      setIsStreaming(false);
+      setStreamProgress(null);
     }
   }, []);
 
@@ -851,6 +879,39 @@ export default function HomePage() {
                   </>
                 )}
               </button>
+
+              {/* Stream Batch button (Phase 4 SSE) */}
+              {isBatchDomain && (
+                <button
+                  id="stream-batch-btn"
+                  onClick={() => handleBatchStream(batchSamples)}
+                  disabled={isLoading || isStreaming}
+                  style={{
+                    background: isStreaming ? "#D19E4A" : "#1C1F21",
+                    border: "1px solid #D19E4A",
+                    borderRadius: 10,
+                    padding: "16px 20px",
+                    color: isStreaming ? "#141617" : "#D19E4A",
+                    cursor: isLoading || isStreaming ? "not-allowed" : "pointer",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    fontFamily: "'Courier New', monospace",
+                    letterSpacing: "0.05em",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    transition: "all 0.2s ease",
+                  }}
+                  title="Progressively stream graph generation one-by-one via Server-Sent Events"
+                >
+                  <span>⚡</span>
+                  <span>
+                    {isStreaming && streamProgress
+                      ? `${streamProgress.current}/${streamProgress.total}...`
+                      : "STREAM (SSE)"}
+                  </span>
+                </button>
+              )}
 
               {/* Oracle button — only visible in Batch Explorer when data exists */}
               {isBatchDomain && (
