@@ -1,4 +1,5 @@
 import ast
+import re
 import networkx as nx
 import uuid
 
@@ -7,8 +8,14 @@ def parse_boolean_circuit(formula: str) -> dict:
     Parses a boolean logic formula into a DAG representing a Boolean Circuit.
     Computes the circuit depth (longest path) and assigns saliency (critical path).
     """
+    # Normalize uppercase boolean operator keywords to Python ast tokens
+    normalized = re.sub(r'\bAND\b', 'and', formula)
+    normalized = re.sub(r'\bOR\b', 'or', normalized)
+    normalized = re.sub(r'\bNOT\b', 'not', normalized)
+    normalized = re.sub(r'\bXOR\b', '^', normalized)
+
     try:
-        tree = ast.parse(formula, mode='eval')
+        tree = ast.parse(normalized, mode='eval')
     except SyntaxError as e:
         raise ValueError(f"Invalid boolean formula syntax: {e}")
 

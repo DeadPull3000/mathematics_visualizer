@@ -3,13 +3,13 @@ uvicorn[standard]==0.32.1
 pydantic==2.9.2
 networkx==3.4.2
 numpy==2.1.3
-
 scipy
-
 gudhi
-
 torch
 scikit-image
 numexpr
 ripser
 scikit-learn
+sympy>=1.13.0
+pytest>=8.0.0
+httpx>=0.27.0
