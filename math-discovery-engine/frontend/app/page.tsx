@@ -594,17 +594,6 @@ export default function HomePage() {
 
   return (
     <>
-      <style>{`
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; background: #141617; color: #E6E4DF; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: #141617; }
-        ::-webkit-scrollbar-thumb { background: #2C3133; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #888C8E; }
-        @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.25; } 50% { transform: scale(1.08); opacity: 0.55; } }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
-
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         {/* Top bar */}
         <header
@@ -620,13 +609,16 @@ export default function HomePage() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <span style={{ color: "#E6E4DF", fontSize: 13, fontWeight: 600, letterSpacing: "0.04em" }}>
-              Visual Mathematical Discovery Engine
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 20, lineHeight: 1 }}>𝕄</span>
+              <span style={{ color: "#E6E4DF", fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", fontFamily: "'Georgia', serif" }}>
+                Visual Mathematical Discovery Engine
+              </span>
             </span>
             <span
               style={{
-                background: "#2C3133",
-                color: "#888C8E",
+                background: "#2C313350",
+                color: "#6B8075",
                 fontSize: 9,
                 fontWeight: 600,
                 letterSpacing: "0.1em",
@@ -635,7 +627,7 @@ export default function HomePage() {
                 textTransform: "uppercase",
               }}
             >
-              Step 2 · Data Ingestion
+              Phase 6 · v1.0
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>

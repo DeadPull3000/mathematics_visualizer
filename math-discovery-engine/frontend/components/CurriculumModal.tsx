@@ -144,7 +144,7 @@ export function CurriculumModal({ isOpen, onClose, onLaunchScenario }: Curriculu
           background: "#1C1F21",
           border: "1px solid #D19E4A66",
           borderRadius: 14,
-          boxShadow: "0 10px 40px rgba(0, 0, 0, 0.7), 0 0 40px #D19E4A15",
+          boxShadow: "0 10px 40px #0F111388, 0 0 40px #D19E4A15",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",

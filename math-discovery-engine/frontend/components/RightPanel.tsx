@@ -430,9 +430,121 @@ export function RightPanel({
             <div style={{ color: "#888C8E", fontSize: 9, lineHeight: 1.7 }}>
               <span style={{ color: domain.color, fontWeight: 600 }}>Professor mode</span>
               <br />
-              These parameters will tune the persistent homology pipeline and GNN architecture in
-              Step 3.
+              These parameters tune the persistent homology pipeline and GNN architecture.
             </div>
+          </div>
+
+          {/* ── Session Persistence ───────────────────────────────────── */}
+          <div>
+            <div
+              style={{
+                color: "#888C8E",
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                marginBottom: 12,
+              }}
+            >
+              ◈ Session Vault
+            </div>
+
+            {/* Create new session */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+              <input
+                type="text"
+                value={newSessionTitle}
+                onChange={(e) => setNewSessionTitle(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreateSession()}
+                placeholder="Session title…"
+                style={{
+                  flex: 1,
+                  background: "#0F1113",
+                  border: "1px solid #2C3133",
+                  borderRadius: 6,
+                  color: "#E6E4DF",
+                  fontSize: 11,
+                  padding: "6px 8px",
+                  outline: "none",
+                  fontFamily: "'Courier New', monospace",
+                }}
+              />
+              <button
+                onClick={handleCreateSession}
+                disabled={!newSessionTitle.trim()}
+                style={{
+                  background: newSessionTitle.trim() ? "#2C3133" : "#1C1F21",
+                  border: "1px solid #2C3133",
+                  borderRadius: 6,
+                  color: newSessionTitle.trim() ? "#E6E4DF" : "#555A5D",
+                  cursor: newSessionTitle.trim() ? "pointer" : "not-allowed",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: "6px 10px",
+                  transition: "all 0.15s",
+                  letterSpacing: "0.06em",
+                }}
+              >
+                NEW
+              </button>
+            </div>
+
+            {/* Session selector */}
+            {sessions.length > 0 && (
+              <select
+                value={activeSessionId}
+                onChange={(e) => setActiveSessionId(e.target.value)}
+                style={{
+                  width: "100%",
+                  background: "#0F1113",
+                  border: "1px solid #2C3133",
+                  borderRadius: 6,
+                  color: "#E6E4DF",
+                  fontSize: 11,
+                  padding: "6px 8px",
+                  marginBottom: 10,
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              >
+                {sessions.map((s) => (
+                  <option key={s.id} value={s.id} style={{ background: "#1C1F21" }}>
+                    {s.title} ({s.exploration_count ?? 0})
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* Save exploration button */}
+            <button
+              id="save-exploration-btn"
+              onClick={handleSaveExploration}
+              disabled={isSaving}
+              style={{
+                width: "100%",
+                background: saveSuccess
+                  ? "#6B807522"
+                  : isSaving
+                  ? "#2C3133"
+                  : "#D19E4A18",
+                border: `1px solid ${saveSuccess ? "#6B8075" : isSaving ? "#2C3133" : "#D19E4A"}`,
+                borderRadius: 6,
+                color: saveSuccess ? "#6B8075" : isSaving ? "#555A5D" : "#D19E4A",
+                cursor: isSaving ? "not-allowed" : "pointer",
+                fontSize: 10,
+                fontWeight: 700,
+                padding: "7px 10px",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                transition: "all 0.2s ease",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              {saveSuccess ? "✓ Saved" : isSaving ? "Saving…" : "⊕ Save Exploration"}
+            </button>
           </div>
         </div>
       )}

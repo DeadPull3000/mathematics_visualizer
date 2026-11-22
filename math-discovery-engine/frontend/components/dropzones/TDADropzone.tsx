@@ -140,7 +140,7 @@ export function TDADropzone({
               </div>
               <span
                 style={{
-                  color: isSelected ? "#C2BFB8" : "#555A5D",
+                  color: isSelected ? "#E6E4DF" : "#555A5D",
                   fontSize: 10,
                   lineHeight: 1.4,
                 }}

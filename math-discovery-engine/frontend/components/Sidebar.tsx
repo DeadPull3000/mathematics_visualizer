@@ -38,8 +38,8 @@ export function Sidebar({ selected, onSelect }: SidebarProps) {
             Discovery Engine
           </span>
         </div>
-        <span style={{ color: "#888C8E", fontSize: 11, letterSpacing: "0.08em" }}>
-          VISUAL MATH · v0.7
+        <span style={{ color: "#555A5D", fontSize: 10, letterSpacing: "0.08em" }}>
+          PHASE 6 · v1.0
         </span>
       </div>
 

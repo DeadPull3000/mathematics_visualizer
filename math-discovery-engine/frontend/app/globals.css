@@ -4,97 +4,206 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ─── Chalk, Slate, and Terracotta — Design Tokens ──────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   CHALK, SLATE & TERRACOTTA — Design System v1.0
+   The definitive dark academic chalkboard palette.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root {
+  /* ── Core Backgrounds ───────────────────────────────────────────────────── */
+  --color-bg-primary:    #141617;  /* Obsidian Slate    — page background     */
+  --color-bg-card:       #1C1F21;  /* Chalkboard Grey   — card surfaces       */
+  --color-bg-deep:       #0F1113;  /* Deeper Slate      — inset / code blocks */
+  --color-bg-raised:     #222628;  /* Raised Surface    — hover, active items */
+
+  /* ── Text ───────────────────────────────────────────────────────────────── */
+  --color-text-primary:  #E6E4DF;  /* Warm Alabaster    — body text           */
+  --color-text-muted:    #888C8E;  /* Faded Lead        — secondary / labels  */
+  --color-text-faint:    #555A5D;  /* Very Faint        — disabled / tertiary */
+
+  /* ── Borders ────────────────────────────────────────────────────────────── */
+  --color-border:        #2C3133;  /* Slate Joint       — card, panel borders */
+  --color-border-subtle: #222628;  /* Subtle            — table row dividers  */
+
+  /* ── Brand Accents ──────────────────────────────────────────────────────── */
+  --color-terracotta:    #C05640;  /* Active / Error / Anomaly                */
+  --color-ochre:         #D19E4A;  /* Symmetry / Discovery / Gold             */
+  --color-sage:          #6B8075;  /* Stable / Success / Topology             */
+
+  /* ── Typography ─────────────────────────────────────────────────────────── */
+  --font-sans:   var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif:  'Georgia', 'Times New Roman', serif;
+  --font-mono:   'Courier New', Courier, monospace;
+
+  /* ── Radii ──────────────────────────────────────────────────────────────── */
+  --radius:   0.5rem;
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     SHADCN / TAILWIND TOKEN REMAPPING
+     All Tailwind utilities resolve against these tokens.
+     bg-background, text-foreground, border-border etc. now use our palette.
+     ══════════════════════════════════════════════════════════════════════════ */
+
   /* Backgrounds */
-  --color-bg-primary:    #141617;  /* Obsidian Slate   */
-  --color-bg-card:       #1C1F21;  /* Chalkboard Grey  */
-  --color-bg-deep:       #0F1113;  /* Deeper than primary */
+  --background:                #141617;
+  --foreground:                #E6E4DF;
 
-  /* Text */
-  --color-text-primary:  #E6E4DF;  /* Warm Alabaster   */
-  --color-text-muted:    #888C8E;  /* Faded Lead       */
+  /* Cards */
+  --card:                      #1C1F21;
+  --card-foreground:           #E6E4DF;
 
-  /* Borders */
-  --color-border:        #2C3133;  /* Slate Joint      */
+  /* Popover / dropdown surfaces */
+  --popover:                   #1C1F21;
+  --popover-foreground:        #E6E4DF;
 
-  /* Accents */
-  --color-terracotta:    #C05640;  /* Active / Anomaly */
-  --color-ochre:         #D19E4A;  /* Symmetry / Motif */
-  --color-sage:          #6B8075;  /* Stable / Success */
+  /* Primary action (Terracotta) */
+  --primary:                   #C05640;
+  --primary-foreground:        #F5F3EF;
 
-  /* Typography */
-  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'Courier New', Courier, monospace;
-  --background:    oklch(1 0 0);
-  --foreground:    oklch(0.145 0 0);
-  --card:    oklch(1 0 0);
-  --card-foreground:    oklch(0.145 0 0);
-  --popover:    oklch(1 0 0);
-  --popover-foreground:    oklch(0.145 0 0);
-  --primary:    oklch(0.205 0 0);
-  --primary-foreground:    oklch(0.985 0 0);
-  --secondary:    oklch(0.97 0 0);
-  --secondary-foreground:    oklch(0.205 0 0);
-  --muted:    oklch(0.97 0 0);
-  --muted-foreground:    oklch(0.556 0 0);
-  --accent:    oklch(0.97 0 0);
-  --accent-foreground:    oklch(0.205 0 0);
-  --destructive:    oklch(0.577 0.245 27.325);
-  --border:    oklch(0.922 0 0);
-  --input:    oklch(0.922 0 0);
-  --ring:    oklch(0.708 0 0);
-  --chart-1:    oklch(0.87 0 0);
-  --chart-2:    oklch(0.556 0 0);
-  --chart-3:    oklch(0.439 0 0);
-  --chart-4:    oklch(0.371 0 0);
-  --chart-5:    oklch(0.269 0 0);
-  --radius:    0.625rem;
-  --sidebar:    oklch(0.985 0 0);
-  --sidebar-foreground:    oklch(0.145 0 0);
-  --sidebar-primary:    oklch(0.205 0 0);
-  --sidebar-primary-foreground:    oklch(0.985 0 0);
-  --sidebar-accent:    oklch(0.97 0 0);
-  --sidebar-accent-foreground:    oklch(0.205 0 0);
-  --sidebar-border:    oklch(0.922 0 0);
-  --sidebar-ring:    oklch(0.708 0 0);
+  /* Secondary (muted slate) */
+  --secondary:                 #2C3133;
+  --secondary-foreground:      #E6E4DF;
+
+  /* Muted surfaces */
+  --muted:                     #1C1F21;
+  --muted-foreground:          #888C8E;
+
+  /* Accent (Ochre) */
+  --accent:                    #D19E4A20;
+  --accent-foreground:         #D19E4A;
+
+  /* Destructive (brighter terracotta) */
+  --destructive:               #C05640;
+  --destructive-foreground:    #F5F3EF;
+
+  /* Borders, inputs, rings */
+  --border:                    #2C3133;
+  --input:                     #2C3133;
+  --ring:                      #6B8075;
+
+  /* Sidebar */
+  --sidebar:                   #1C1F21;
+  --sidebar-foreground:        #E6E4DF;
+  --sidebar-primary:           #C05640;
+  --sidebar-primary-foreground:#F5F3EF;
+  --sidebar-accent:            #2C313360;
+  --sidebar-accent-foreground: #E6E4DF;
+  --sidebar-border:            #2C3133;
+  --sidebar-ring:              #6B8075;
+
+  /* Charts — mapped to our accent palette */
+  --chart-1:  #C05640;
+  --chart-2:  #D19E4A;
+  --chart-3:  #6B8075;
+  --chart-4:  #888C8E;
+  --chart-5:  #2C3133;
 }
 
-/* ─── Reset ──────────────────────────────────────────────────────────────────── */
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* ── Tailwind @theme inline — exposes CSS vars as Tailwind utility names ─── */
+@theme inline {
+  --font-heading:                      var(--font-sans);
+  --font-sans:                         var(--font-sans);
+  --color-background:                  var(--background);
+  --color-foreground:                  var(--foreground);
+  --color-card:                        var(--card);
+  --color-card-foreground:             var(--card-foreground);
+  --color-popover:                     var(--popover);
+  --color-popover-foreground:          var(--popover-foreground);
+  --color-primary:                     var(--primary);
+  --color-primary-foreground:          var(--primary-foreground);
+  --color-secondary:                   var(--secondary);
+  --color-secondary-foreground:        var(--secondary-foreground);
+  --color-muted:                       var(--muted);
+  --color-muted-foreground:            var(--muted-foreground);
+  --color-accent:                      var(--accent);
+  --color-accent-foreground:           var(--accent-foreground);
+  --color-destructive:                 var(--destructive);
+  --color-border:                      var(--border);
+  --color-input:                       var(--input);
+  --color-ring:                        var(--ring);
+  --color-chart-1:                     var(--chart-1);
+  --color-chart-2:                     var(--chart-2);
+  --color-chart-3:                     var(--chart-3);
+  --color-chart-4:                     var(--chart-4);
+  --color-chart-5:                     var(--chart-5);
+  --color-sidebar:                     var(--sidebar);
+  --color-sidebar-foreground:          var(--sidebar-foreground);
+  --color-sidebar-primary:             var(--sidebar-primary);
+  --color-sidebar-primary-foreground:  var(--sidebar-primary-foreground);
+  --color-sidebar-accent:              var(--sidebar-accent);
+  --color-sidebar-accent-foreground:   var(--sidebar-accent-foreground);
+  --color-sidebar-border:              var(--sidebar-border);
+  --color-sidebar-ring:                var(--sidebar-ring);
+  --radius-sm:   calc(var(--radius) * 0.6);
+  --radius-md:   calc(var(--radius) * 0.8);
+  --radius-lg:   var(--radius);
+  --radius-xl:   calc(var(--radius) * 1.4);
+  --radius-2xl:  calc(var(--radius) * 1.8);
+  --radius-3xl:  calc(var(--radius) * 2.2);
+  --radius-4xl:  calc(var(--radius) * 2.6);
 }
 
-html, body {
-  height: 100%;
-  background: var(--color-bg-primary);
+/* ── Base Layer ─────────────────────────────────────────────────────────────
+   The .dark class is not needed — we're always dark.
+   The @layer base ensures bg-background and text-foreground use the
+   dark slate values set above.
+   ─────────────────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    height: 100%;
+    @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    height: 100%;
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ── Scrollbars ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 4px; height: 4px; }
+::-webkit-scrollbar-track  { background: var(--color-bg-primary); }
+::-webkit-scrollbar-thumb  { background: var(--color-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+/* ── Selection ──────────────────────────────────────────────────────────────── */
+::selection {
+  background: #C0564035;
   color: var(--color-text-primary);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ─── Scrollbars ─────────────────────────────────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-::-webkit-scrollbar-track {
-  background: var(--color-bg-primary);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+/* ── Focus outline reset (keeps keyboard nav but removes ugly chrome defaults) */
+:focus-visible {
+  outline: 1.5px solid var(--color-sage);
+  outline-offset: 2px;
 }
 
-/* ─── Animations ─────────────────────────────────────────────────────────────── */
+/* ── Input / textarea theming ───────────────────────────────────────────────── */
+input, textarea, select {
+  color-scheme: dark;
+}
+
+input[type="range"] {
+  accent-color: var(--color-sage);
+}
+
+/* ── Keyframe Animations ────────────────────────────────────────────────────── */
 @keyframes pulse-ring {
-  0%, 100% { transform: scale(1); opacity: 0.25; }
+  0%, 100% { transform: scale(1);    opacity: 0.2;  }
+  50%       { transform: scale(1.08); opacity: 0.55; }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1);    opacity: 0.2;  }
   50%       { transform: scale(1.08); opacity: 0.55; }
 }
 
@@ -104,101 +213,41 @@ html, body {
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);   }
 }
 
-/* ─── Selection ──────────────────────────────────────────────────────────────── */
-::selection {
-  background: #C0564030;
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0);    }
+}
+
+/* ── Reusable utility classes ───────────────────────────────────────────────── */
+
+/* Chalk Card — the core card surface */
+.chalk-card {
+  background:    var(--color-bg-card);
+  border:        1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+/* Mono label — small monospaced number display */
+.mono-value {
+  font-family: var(--font-mono);
+  font-weight: 700;
   color: var(--color-text-primary);
 }
 
-@theme inline {
-  --font-heading:    var(--font-sans);
-  --font-sans:    var(--font-sans);
-  --color-sidebar-ring:    var(--sidebar-ring);
-  --color-sidebar-border:    var(--sidebar-border);
-  --color-sidebar-accent-foreground:    var(--sidebar-accent-foreground);
-  --color-sidebar-accent:    var(--sidebar-accent);
-  --color-sidebar-primary-foreground:    var(--sidebar-primary-foreground);
-  --color-sidebar-primary:    var(--sidebar-primary);
-  --color-sidebar-foreground:    var(--sidebar-foreground);
-  --color-sidebar:    var(--sidebar);
-  --color-chart-5:    var(--chart-5);
-  --color-chart-4:    var(--chart-4);
-  --color-chart-3:    var(--chart-3);
-  --color-chart-2:    var(--chart-2);
-  --color-chart-1:    var(--chart-1);
-  --color-ring:    var(--ring);
-  --color-input:    var(--input);
-  --color-border:    var(--border);
-  --color-destructive:    var(--destructive);
-  --color-accent-foreground:    var(--accent-foreground);
-  --color-accent:    var(--accent);
-  --color-muted-foreground:    var(--muted-foreground);
-  --color-muted:    var(--muted);
-  --color-secondary-foreground:    var(--secondary-foreground);
-  --color-secondary:    var(--secondary);
-  --color-primary-foreground:    var(--primary-foreground);
-  --color-primary:    var(--primary);
-  --color-popover-foreground:    var(--popover-foreground);
-  --color-popover:    var(--popover);
-  --color-card-foreground:    var(--card-foreground);
-  --color-card:    var(--card);
-  --color-foreground:    var(--foreground);
-  --color-background:    var(--background);
-  --radius-sm:    calc(var(--radius) * 0.6);
-  --radius-md:    calc(var(--radius) * 0.8);
-  --radius-lg:    var(--radius);
-  --radius-xl:    calc(var(--radius) * 1.4);
-  --radius-2xl:    calc(var(--radius) * 1.8);
-  --radius-3xl:    calc(var(--radius) * 2.2);
-  --radius-4xl:    calc(var(--radius) * 2.6);
+/* Section label — 10px uppercase spaced label */
+.section-label {
+  color:           var(--color-text-muted);
+  font-size:       10px;
+  font-weight:     600;
+  letter-spacing:  0.1em;
+  text-transform:  uppercase;
 }
 
-.dark {
-  --background:    oklch(0.145 0 0);
-  --foreground:    oklch(0.985 0 0);
-  --card:    oklch(0.205 0 0);
-  --card-foreground:    oklch(0.985 0 0);
-  --popover:    oklch(0.205 0 0);
-  --popover-foreground:    oklch(0.985 0 0);
-  --primary:    oklch(0.922 0 0);
-  --primary-foreground:    oklch(0.205 0 0);
-  --secondary:    oklch(0.269 0 0);
-  --secondary-foreground:    oklch(0.985 0 0);
-  --muted:    oklch(0.269 0 0);
-  --muted-foreground:    oklch(0.708 0 0);
-  --accent:    oklch(0.269 0 0);
-  --accent-foreground:    oklch(0.985 0 0);
-  --destructive:    oklch(0.704 0.191 22.216);
-  --border:    oklch(1 0 0 / 10%);
-  --input:    oklch(1 0 0 / 15%);
-  --ring:    oklch(0.556 0 0);
-  --chart-1:    oklch(0.87 0 0);
-  --chart-2:    oklch(0.556 0 0);
-  --chart-3:    oklch(0.439 0 0);
-  --chart-4:    oklch(0.371 0 0);
-  --chart-5:    oklch(0.269 0 0);
-  --sidebar:    oklch(0.205 0 0);
-  --sidebar-foreground:    oklch(0.985 0 0);
-  --sidebar-primary:    oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground:    oklch(0.985 0 0);
-  --sidebar-accent:    oklch(0.269 0 0);
-  --sidebar-accent-foreground:    oklch(0.985 0 0);
-  --sidebar-border:    oklch(1 0 0 / 10%);
-  --sidebar-ring:    oklch(0.556 0 0);
-}
-
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-  html {
-    @apply font-sans;
-  }
+/* Fade in animation */
+.fade-in {
+  animation: fade-in 0.25s ease-out both;
 }
