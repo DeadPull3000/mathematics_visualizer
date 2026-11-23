@@ -1,3 +1,10 @@
+<picture>
+  <source media="(prefers-reduced-motion: no-preference)" srcset="./project-scan.gif">
+  <img src="./project-static.png" width="1056" alt="Mathematical Discovery Engine ASCII project diagram">
+</picture>
+
+Explore graph spectra, persistence barcodes and surface meshes in an interactive mathematical workbench.
+
 # Visual Mathematical Discovery Engine
 
 > Discover new theorems by visualising the latent structure of mathematical objects.
